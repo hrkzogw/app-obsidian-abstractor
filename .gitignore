@@ -148,3 +148,7 @@ config/config.yaml
 /output/
 /watch/
 .obsidian/
+
+# Test outputs
+/tests/outputs/
+/tests/debug/
