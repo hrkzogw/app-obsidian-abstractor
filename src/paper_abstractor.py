@@ -71,23 +71,19 @@ class PaperAbstractor:
         templates = {}
         prompt_dir = Path(__file__).parent.parent / 'config' / 'prompts'
         
-        # Check for new markdown template first
-        markdown_template_ja = prompt_dir / 'academic_abstract_markdown_ja.txt'
-        if markdown_template_ja.exists():
-            templates['markdown_ja'] = markdown_template_ja.read_text(encoding='utf-8')
-        
-        # Default templates if files don't exist
-        default_templates = {
-            'ja': self._get_default_japanese_prompt(),
-            'en': self._get_default_english_prompt(),
-        }
-        
-        for lang in ['ja', 'en']:
-            template_file = prompt_dir / f'academic_abstract_{lang}.txt'
-            if template_file.exists():
-                templates[lang] = template_file.read_text(encoding='utf-8')
-            else:
-                templates[lang] = default_templates[lang]
+        # Load the unified prompt template
+        template_file = prompt_dir / 'academic_abstract.txt'
+        if template_file.exists():
+            template_content = template_file.read_text(encoding='utf-8')
+            # Use the same template for all languages/modes
+            templates['markdown_ja'] = template_content
+            templates['ja'] = template_content
+            templates['en'] = template_content
+        else:
+            # Fallback to default templates if file doesn't exist
+            templates['markdown_ja'] = self._get_default_japanese_prompt()
+            templates['ja'] = self._get_default_japanese_prompt()
+            templates['en'] = self._get_default_english_prompt()
         
         return templates
     
