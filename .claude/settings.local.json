@@ -3,7 +3,13 @@
     "allow": [
       "mcp__sequential-thinking__sequentialthinking",
       "mcp__context7__resolve-library-id",
-      "mcp__context7__get-library-docs"
+      "mcp__context7__get-library-docs",
+      "Bash(python:*)",
+      "Bash(pip index show:*)",
+      "WebFetch(domain:pypi.org)",
+      "Bash(source:*)",
+      "Bash(pip --version)",
+      "Bash(pip install:*)"
     ],
     "deny": []
   }

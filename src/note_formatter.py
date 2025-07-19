@@ -46,6 +46,12 @@ class NoteFormatter:
         Returns:
             Formatted markdown note content
         """
+        # Check if we're using direct markdown format
+        if abstract_data.get('use_markdown_format', False):
+            # Return the markdown content directly
+            return abstract_data.get('markdown_content', '')
+        
+        # Otherwise, use the traditional formatting approach
         # Generate frontmatter
         frontmatter = self.generate_frontmatter(pdf_data, abstract_data, pdf_path)
         

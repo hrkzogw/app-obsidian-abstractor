@@ -13,8 +13,8 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import time
 import json
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +34,11 @@ class PaperAbstractor:
         if not self.api_key:
             raise ValueError("Google AI API key not configured")
         
-        # Configure Gemini
-        genai.configure(api_key=self.api_key)
+        # Initialize Gemini client
+        self.client = genai.Client(api_key=self.api_key)
         
         # Model settings
-        self.model_name = config.get('api', {}).get('model', 'gemini-pro')
+        self.model_name = config.get('api', {}).get('model', 'gemini-2.0-flash-001')
         self.max_tokens = config.get('api', {}).get('max_tokens', 2048)
         
         # Abstractor settings
@@ -48,14 +48,16 @@ class PaperAbstractor:
         self.include_figures = config.get('abstractor', {}).get('include_figures', True)
         self.extract_keywords = config.get('abstractor', {}).get('extract_keywords', True)
         
+        # Visual extraction settings
+        self.enable_visual_extraction = config.get('abstractor', {}).get('enable_visual_extraction', False)
+        self.max_image_pages = config.get('abstractor', {}).get('max_image_pages', 3)
+        self.image_dpi = config.get('abstractor', {}).get('image_dpi', 150)
+        
         # Rate limiting
         self.rate_limit = config.get('rate_limit', {})
         self.requests_per_minute = self.rate_limit.get('requests_per_minute', 60)
         self.request_delay = self.rate_limit.get('request_delay', 1)
         self.retry_attempts = config.get('advanced', {}).get('retry_attempts', 3)
-        
-        # Initialize model
-        self._init_model()
         
         # Load prompt templates
         self.prompt_templates = self._load_prompt_templates()
@@ -63,32 +65,16 @@ class PaperAbstractor:
         # Request tracking for rate limiting
         self._request_times: List[float] = []
     
-    def _init_model(self):
-        """Initialize the Gemini model."""
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "top_k": 40,
-            "max_output_tokens": self.max_tokens,
-        }
-        
-        safety_settings = {
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-        }
-        
-        self.model = genai.GenerativeModel(
-            model_name=self.model_name,
-            generation_config=generation_config,
-            safety_settings=safety_settings,
-        )
     
     def _load_prompt_templates(self) -> Dict[str, str]:
         """Load prompt templates from files."""
         templates = {}
         prompt_dir = Path(__file__).parent.parent / 'config' / 'prompts'
+        
+        # Check for new markdown template first
+        markdown_template_ja = prompt_dir / 'academic_abstract_markdown_ja.txt'
+        if markdown_template_ja.exists():
+            templates['markdown_ja'] = markdown_template_ja.read_text(encoding='utf-8')
         
         # Default templates if files don't exist
         default_templates = {
@@ -121,10 +107,31 @@ class PaperAbstractor:
         # Prepare input data
         input_text = self._prepare_input_text(pdf_data)
         
+        # Extract page images if visual extraction is enabled
+        page_images = None
+        if self.enable_visual_extraction and pdf_data.get('pdf_path'):
+            try:
+                from .pdf_extractor import PDFExtractor
+                extractor = PDFExtractor(self.config)
+                page_images = extractor.extract_page_images(
+                    Path(pdf_data['pdf_path']),
+                    dpi=self.image_dpi
+                )
+                logger.info(f"Extracted {len(page_images)} page images for visual processing")
+            except Exception as e:
+                logger.warning(f"Failed to extract page images: {e}")
+                # Continue without images
+        
+        # Check if we should use markdown template
+        use_markdown = 'markdown_ja' in self.prompt_templates and self.language == 'ja'
+        
         # Generate abstract with retries
         for attempt in range(self.retry_attempts):
             try:
-                abstract_data = await self._generate_with_gemini(input_text, pdf_data)
+                if use_markdown:
+                    abstract_data = await self._generate_markdown_with_gemini(input_text, pdf_data, page_images)
+                else:
+                    abstract_data = await self._generate_with_gemini(input_text, pdf_data, page_images)
                 return abstract_data
             except Exception as e:
                 logger.warning(f"Attempt {attempt + 1} failed: {e}")
@@ -151,7 +158,7 @@ class PaperAbstractor:
         # Add main text
         text = pdf_data.get('text', '')
         # Limit text length to avoid token limits
-        max_chars = 30000  # Approximately 7500 tokens
+        max_chars = 60000  # Approximately 15000 tokens
         if len(text) > max_chars:
             text = text[:max_chars] + "\n\n[Text truncated due to length...]"
         parts.append(text)
@@ -170,7 +177,8 @@ class PaperAbstractor:
         
         return "\n".join(parts)
     
-    async def _generate_with_gemini(self, input_text: str, pdf_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _generate_with_gemini(self, input_text: str, pdf_data: Dict[str, Any], 
+                                    page_images: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """Generate abstract using Gemini API."""
         # Get appropriate prompt template
         prompt_template = self.prompt_templates.get(self.language, self.prompt_templates['en'])
@@ -182,15 +190,43 @@ class PaperAbstractor:
             language="日本語" if self.language == 'ja' else "English",
         )
         
-        # Generate response
+        # Create generation config
+        generation_config = types.GenerateContentConfig(
+            temperature=0.7,
+            max_output_tokens=self.max_tokens,
+        )
+        
+        # Build contents for multimodal request
+        contents = self._build_multimodal_contents(prompt, page_images)
+        
+        # Generate response using new SDK
+        def _generate_sync():
+            return self.client.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+                config=generation_config
+            )
+        
         response = await asyncio.get_event_loop().run_in_executor(
             None,
-            self.model.generate_content,
-            prompt
+            _generate_sync
         )
         
         # Parse the response
         abstract_text = response.text
+        
+        # Debug: Log the raw response
+        if self.config.get('advanced', {}).get('log_level') == 'DEBUG':
+            logger.debug(f"Raw Gemini response:\n{abstract_text}")
+            
+            # Also save to file for inspection
+            debug_dir = Path("debug_output")
+            debug_dir.mkdir(exist_ok=True)
+            debug_file = debug_dir / f"gemini_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            with open(debug_file, 'w', encoding='utf-8') as f:
+                f.write(f"Prompt used:\n{prompt}\n\n")
+                f.write(f"Response:\n{abstract_text}")
+            logger.debug(f"Gemini output saved to: {debug_file}")
         
         # Check if it's an experimental or review paper
         is_experimental = '実験論文' in abstract_text or 'Experimental Paper' in abstract_text
@@ -259,38 +295,165 @@ class PaperAbstractor:
     def _extract_section(self, text: str, section_names: List[str]) -> str:
         """Extract a specific section from the generated text."""
         lines = text.split('\n')
-        current_section = None
         section_content = []
+        in_target_section = False
+        section_level = 0
         
         for line in lines:
-            line = line.strip()
+            line_stripped = line.strip()
             
             # Check if this is a section header
             is_header = False
+            current_level = 0
+            
+            # Determine header level
+            if line_stripped.startswith('#####'):
+                current_level = 5
+            elif line_stripped.startswith('####'):
+                current_level = 4
+            elif line_stripped.startswith('###'):
+                current_level = 3
+            elif line_stripped.startswith('##'):
+                current_level = 2
+            elif line_stripped.startswith('#'):
+                current_level = 1
+            
+            # Check if this line matches our target section
             for name in section_names:
-                if (line.startswith(f"## {name}") or 
-                    line.startswith(f"# {name}") or 
-                    line.startswith(f"### {name}") or
-                    line.startswith(f"#### {name}") or
-                    line.startswith(f"##### {name}") or
-                    line.startswith(f"{name}:") or
-                    line == name):
+                if (line_stripped.startswith(f"{'#' * current_level} {name}") or 
+                    line_stripped.startswith(f"{'#' * current_level}{name}") or
+                    line_stripped.startswith(f"**{name}") or
+                    line_stripped.startswith(f"{name}:") or
+                    (line_stripped == name and current_level > 0)):
                     is_header = True
-                    current_section = name
+                    in_target_section = True
+                    section_level = current_level
+                    # Extract any content after the header on the same line
+                    content_after_header = line_stripped.split(name, 1)
+                    if len(content_after_header) > 1:
+                        content = content_after_header[1].strip().lstrip(':*').strip()
+                        if content:
+                            section_content.append(content)
                     break
             
             if is_header:
-                continue
-            
-            # Check if we've reached another section
-            if current_section and line.startswith(('#', '##', '###', '####', '#####')) and not any(name in line for name in section_names):
-                break
-            
-            # Add content if we're in the target section
-            if current_section and line:
-                section_content.append(line)
+                # If we found our target section, we already handled it above
+                if not in_target_section:
+                    continue
+            elif in_target_section:
+                # Check if we've reached another section at the same or higher level
+                if current_level > 0 and current_level <= section_level:
+                    # Check if this is a different section (not our target)
+                    if not any(name in line_stripped for name in section_names):
+                        break
+                
+                # Add content if we're in the target section
+                if line_stripped:
+                    # Clean up formatting
+                    content = line_stripped
+                    # Remove bullet points if they're at the start
+                    if content.startswith(('- ', '* ', '• ')):
+                        content = content[2:].strip()
+                    elif content.startswith(('1. ', '2. ', '3. ', '4. ', '5. ')):
+                        content = content[3:].strip()
+                    
+                    if content:
+                        section_content.append(content)
         
-        return '\n'.join(section_content).strip()
+        result = ' '.join(section_content).strip()
+        
+        # Post-process to clean up common formatting issues
+        result = result.replace('**', '').replace('*', '')
+        result = ' '.join(result.split())  # Normalize whitespace
+        
+        return result
+    
+    async def _generate_markdown_with_gemini(self, input_text: str, pdf_data: Dict[str, Any],
+                                            page_images: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Generate complete markdown using Gemini API."""
+        # Get markdown prompt template
+        prompt_template = self.prompt_templates.get('markdown_ja')
+        
+        # Extract metadata
+        metadata = pdf_data.get('metadata', {})
+        title = metadata.get('title', 'Untitled')
+        authors = metadata.get('author', 'Unknown')
+        year = metadata.get('year', datetime.now().year)
+        page_count = pdf_data.get('page_count', 0)
+        file_size_mb = pdf_data.get('file_size_mb', 0)
+        pdf_filename = pdf_data.get('pdf_path', 'unknown.pdf')
+        if isinstance(pdf_filename, Path):
+            pdf_filename = pdf_filename.name
+        
+        # Format the prompt
+        prompt = prompt_template.format(
+            pdf_text=input_text,
+            max_length=self.max_length,
+            title=title,
+            authors=authors,
+            year=year,
+            page_count=page_count,
+            pdf_filename=pdf_filename
+        )
+        
+        # Create generation config
+        generation_config = types.GenerateContentConfig(
+            temperature=0.7,
+            max_output_tokens=self.max_tokens,
+        )
+        
+        # Build contents for multimodal request
+        contents = self._build_multimodal_contents(prompt, page_images)
+        
+        # Generate response using new SDK
+        def _generate_sync():
+            return self.client.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+                config=generation_config
+            )
+        
+        response = await asyncio.get_event_loop().run_in_executor(
+            None,
+            _generate_sync
+        )
+        
+        # Get the markdown response
+        markdown_text = response.text
+        
+        # Remove markdown code block wrapper if present
+        if markdown_text.startswith('```markdown'):
+            markdown_text = markdown_text[11:]  # Remove ```markdown
+            if markdown_text.endswith('```'):
+                markdown_text = markdown_text[:-3]  # Remove closing ```
+        elif markdown_text.startswith('```'):
+            markdown_text = markdown_text[3:]  # Remove opening ```
+            if markdown_text.endswith('```'):
+                markdown_text = markdown_text[:-3]  # Remove closing ```
+        
+        # Strip any leading/trailing whitespace
+        markdown_text = markdown_text.strip()
+        
+        # Debug: Log the raw response
+        if self.config.get('advanced', {}).get('log_level') == 'DEBUG':
+            logger.debug(f"Raw Gemini markdown response length: {len(markdown_text)} chars")
+            
+            # Also save to file for inspection
+            debug_dir = Path("debug_output")
+            debug_dir.mkdir(exist_ok=True)
+            debug_file = debug_dir / f"gemini_markdown_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+            with open(debug_file, 'w', encoding='utf-8') as f:
+                f.write(markdown_text)
+            logger.debug(f"Gemini markdown output saved to: {debug_file}")
+        
+        # Return the complete markdown as the main content
+        return {
+            'markdown_content': markdown_text,
+            'abstract_language': self.language,
+            'model_used': self.model_name,
+            'generation_date': datetime.now().isoformat(),
+            'use_markdown_format': True
+        }
     
     def _extract_list_section(self, text: str, section_names: List[str]) -> List[str]:
         """Extract a list section from the generated text."""
@@ -312,63 +475,118 @@ class PaperAbstractor:
         """Extract details of individual experiments from the text."""
         experiments = []
         lines = text.split('\n')
-        current_experiment = None
-        current_section = None
+        
+        # Find all experiment sections
+        experiment_sections = []
+        current_exp_lines = []
+        experiment_number = None
+        in_experiment_section = False
         
         for i, line in enumerate(lines):
-            line = line.strip()
+            line_stripped = line.strip()
             
-            # Check for experiment headers
-            if any(pattern in line for pattern in ['実験 ', 'Experiment ', 'A-2']):
-                # Save previous experiment if exists
-                if current_experiment:
-                    experiments.append(current_experiment)
-                
-                # Start new experiment
-                current_experiment = {
-                    'number': self._extract_experiment_number(line),
-                    'objectives': '',
-                    'participants': '',
-                    'tasks': '',
-                    'procedure': '',
-                    'analysis': '',
-                    'results': '',
-                }
-                current_section = 'objectives'
+            # Check for experiment headers (more robust patterns)
+            exp_patterns = [
+                r'実験\s*(\d+)',
+                r'Experiment\s*(\d+)',
+                r'### 実験\s*(\d+)',
+                r'## 実験\s*(\d+)',
+                r'A-2.*実験\s*(\d+)',
+            ]
             
-            elif current_experiment:
-                # Detect section changes
-                if '実験参加者' in line or 'Participants' in line:
-                    current_section = 'participants'
-                elif '課題と刺激' in line or 'Tasks' in line:
-                    current_section = 'tasks'
-                elif '手続き' in line or 'Procedure' in line:
-                    current_section = 'procedure'
-                elif '分析方法' in line or 'Analysis' in line:
-                    current_section = 'analysis'
-                elif '結果と小括' in line or 'Results' in line:
-                    current_section = 'results'
-                elif line.startswith('#'):
-                    # New major section, save current experiment
-                    if current_experiment:
-                        experiments.append(current_experiment)
-                        current_experiment = None
-                else:
-                    # Add content to current section
-                    if current_section and line:
-                        current_experiment[current_section] += line + '\n'
+            found_exp = False
+            for pattern in exp_patterns:
+                import re
+                match = re.search(pattern, line_stripped)
+                if match:
+                    # Save previous experiment if exists
+                    if in_experiment_section and current_exp_lines and experiment_number:
+                        experiment_sections.append({
+                            'number': experiment_number,
+                            'lines': current_exp_lines.copy()
+                        })
+                    
+                    # Start new experiment
+                    experiment_number = match.group(1)
+                    current_exp_lines = [line]
+                    in_experiment_section = True
+                    found_exp = True
+                    break
+            
+            if not found_exp:
+                # Check if we've hit a major section that ends experiments
+                if line_stripped.startswith('## ') and any(section in line_stripped for section in [
+                    '総合考察', '結論', 'General Discussion', 'Discussion', 'Conclusion'
+                ]):
+                    if in_experiment_section and current_exp_lines and experiment_number:
+                        experiment_sections.append({
+                            'number': experiment_number,
+                            'lines': current_exp_lines.copy()
+                        })
+                    in_experiment_section = False
+                elif in_experiment_section:
+                    current_exp_lines.append(line)
         
-        # Save last experiment
-        if current_experiment:
-            experiments.append(current_experiment)
+        # Save last experiment if exists
+        if in_experiment_section and current_exp_lines and experiment_number:
+            experiment_sections.append({
+                'number': experiment_number,
+                'lines': current_exp_lines.copy()
+            })
         
-        # Clean up experiment data
-        for exp in experiments:
-            for key in exp:
-                if isinstance(exp[key], str):
-                    exp[key] = exp[key].strip()
+        # Parse each experiment section
+        for exp_section in experiment_sections:
+            exp_text = '\n'.join(exp_section['lines'])
+            experiment = {
+                'number': exp_section['number'],
+                'objectives': self._extract_experiment_field(exp_text, ['目的と仮説', 'Objectives', 'Hypothesis']),
+                'participants': self._extract_experiment_field(exp_text, ['実験参加者', 'Participants', '参加者']),
+                'tasks': self._extract_experiment_field(exp_text, ['課題と刺激', 'Tasks', 'Stimuli', '課題']),
+                'procedure': self._extract_experiment_field(exp_text, ['手続き', 'Procedure', 'プロシージャ']),
+                'analysis': self._extract_experiment_field(exp_text, ['分析方法', 'Analysis', 'Statistical Analysis', '統計分析']),
+                'results': self._extract_experiment_field(exp_text, ['結果と小括', 'Results', '結果'])
+            }
+            
+            # Remove empty experiments
+            if any(experiment[key].strip() for key in experiment.keys() if key != 'number'):
+                experiments.append(experiment)
         
         return experiments
+    
+    def _extract_experiment_field(self, exp_text: str, field_names: List[str]) -> str:
+        """Extract a specific field from experiment text."""
+        lines = exp_text.split('\n')
+        field_content = []
+        in_field = False
+        
+        for line in lines:
+            line_stripped = line.strip()
+            
+            # Check if this line is a field header
+            is_field_header = False
+            for field_name in field_names:
+                if (field_name in line_stripped and 
+                    ('**' in line_stripped or ':' in line_stripped or line_stripped.startswith('* '))):
+                    is_field_header = True
+                    in_field = True
+                    # Extract content after the field name
+                    content_part = line_stripped.split(field_name, 1)
+                    if len(content_part) > 1:
+                        content = content_part[1].strip().lstrip('*:').strip()
+                        if content:
+                            field_content.append(content)
+                    break
+            
+            if not is_field_header and in_field:
+                # Check if we've hit another field or major section
+                if (('**' in line_stripped and any(other_field in line_stripped for other_field in [
+                    '目的', '参加者', '課題', '手続き', '分析', '結果', 'Objectives', 'Participants', 'Tasks', 'Procedure', 'Analysis', 'Results'
+                ])) or line_stripped.startswith('### ') or line_stripped.startswith('## ')):
+                    break
+                elif line_stripped:
+                    field_content.append(line_stripped)
+        
+        return ' '.join(field_content).strip()
     
     def _extract_experiment_number(self, line: str) -> str:
         """Extract experiment number from line."""
@@ -482,3 +700,70 @@ class PaperAbstractor:
 
 Paper text:
 {pdf_text}"""
+    
+    def _build_multimodal_contents(self, prompt: str, 
+                                 page_images: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+        """
+        Build contents array for multimodal Gemini request.
+        
+        Args:
+            prompt: Text prompt
+            page_images: Optional list of page images
+            
+        Returns:
+            Contents array formatted for Gemini API
+        """
+        contents = []
+        
+        # Add text prompt
+        text_parts = [{"text": prompt}]
+        
+        # Add images if available
+        if page_images:
+            image_parts = []
+            total_size_kb = 0
+            
+            for img in page_images[:self.max_image_pages]:  # Limit number of images
+                total_size_kb += img.get('file_size_kb', 0)
+                
+                # Check total size limit (12MB)
+                if total_size_kb > 12 * 1024:
+                    logger.warning(f"Total image size exceeds 12MB, stopping at page {img['page_number']}")
+                    break
+                
+                image_parts.append({
+                    "inline_data": {
+                        "mime_type": "image/png",
+                        "data": img['image_data']
+                    }
+                })
+                
+                # Add page reference text
+                text_parts.append({
+                    "text": f"\n[Page {img['page_number']} image above]\n"
+                })
+            
+            if image_parts:
+                logger.info(f"Added {len(image_parts)} images to multimodal request")
+                # Combine text and images
+                all_parts = text_parts[:1]  # Initial prompt
+                for i, img_part in enumerate(image_parts):
+                    all_parts.append(img_part)
+                    if i + 1 < len(text_parts):
+                        all_parts.append(text_parts[i + 1])  # Page reference
+                
+                contents.append({
+                    "role": "user",
+                    "parts": all_parts
+                })
+            else:
+                # Text only
+                contents.append({
+                    "role": "user", 
+                    "parts": text_parts
+                })
+        else:
+            # Text only (for SDK v1.26.0 format)
+            contents = prompt
+        
+        return contents

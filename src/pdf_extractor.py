@@ -7,6 +7,7 @@ from academic PDF files using PyMuPDF (fitz).
 
 import re
 import logging
+import base64
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
@@ -74,6 +75,7 @@ class PDFExtractor:
                 'page_count': len(doc),
                 'file_size_mb': round(file_size_mb, 2),
                 'extraction_date': datetime.now().isoformat(),
+                'pdf_path': str(pdf_path),  # Store path for image extraction
             }
         finally:
             doc.close()
@@ -351,3 +353,197 @@ class PDFExtractor:
             return f"{year}-{month}-{day}"
         
         return None
+    
+    def extract_page_images(self, pdf_path: Path, page_numbers: Optional[List[int]] = None, 
+                          dpi: int = 150) -> List[Dict[str, Any]]:
+        """
+        Extract specified pages as images from PDF (memory-safe implementation).
+        
+        Args:
+            pdf_path: Path to the PDF file
+            page_numbers: List of page numbers to extract (0-indexed). If None, selects optimal pages
+            dpi: DPI for image extraction (default 150)
+            
+        Returns:
+            List of dictionaries containing page images and metadata
+        """
+        doc = None
+        try:
+            doc = fitz.open(pdf_path)
+            images = []
+            
+            # If no page numbers specified, select optimal pages
+            if page_numbers is None:
+                page_numbers = self._select_optimal_pages(doc)
+            
+            for page_num in page_numbers:
+                if page_num >= len(doc):
+                    logger.warning(f"Page {page_num} exceeds document length {len(doc)}")
+                    continue
+                
+                image_data = self._extract_single_page_image(doc, page_num, dpi)
+                if image_data:
+                    images.append(image_data)
+            
+            logger.info(f"Extracted {len(images)} page images from PDF")
+            return images
+            
+        except Exception as e:
+            logger.error(f"Failed to extract page images: {e}")
+            return []
+        finally:
+            if doc:
+                doc.close()
+    
+    def _extract_single_page_image(self, doc: fitz.Document, page_num: int, 
+                                  dpi: int) -> Optional[Dict[str, Any]]:
+        """
+        Extract a single page as image with size limit handling.
+        
+        Args:
+            doc: PyMuPDF document object
+            page_num: Page number (0-indexed)
+            dpi: DPI for image extraction
+            
+        Returns:
+            Dictionary with image data or None if failed
+        """
+        try:
+            page = doc[page_num]
+            
+            # Calculate zoom factor from DPI (PDF default is 72 DPI)
+            zoom = dpi / 72.0
+            mat = fitz.Matrix(zoom, zoom)
+            
+            # First attempt with requested DPI
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            img_data = pix.tobytes("png")
+            
+            # Check size limit (4MB)
+            max_size = 4 * 1024 * 1024
+            if len(img_data) > max_size:
+                logger.warning(f"Page {page_num + 1} image too large ({len(img_data) // 1024}KB), reducing DPI")
+                
+                # Retry with lower DPI
+                reduced_dpi = int(dpi * 0.7)
+                zoom = reduced_dpi / 72.0
+                mat = fitz.Matrix(zoom, zoom)
+                pix = page.get_pixmap(matrix=mat, alpha=False)
+                img_data = pix.tobytes("png")
+                
+                # If still too large, reduce further
+                if len(img_data) > max_size:
+                    reduced_dpi = int(dpi * 0.5)
+                    zoom = reduced_dpi / 72.0
+                    mat = fitz.Matrix(zoom, zoom)
+                    pix = page.get_pixmap(matrix=mat, alpha=False)
+                    img_data = pix.tobytes("png")
+            
+            return {
+                'page_number': page_num + 1,
+                'image_data': base64.b64encode(img_data).decode('utf-8'),
+                'file_size_kb': len(img_data) // 1024,
+                'dpi': dpi,
+                'width': pix.width,
+                'height': pix.height,
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to extract image from page {page_num + 1}: {e}")
+            return None
+    
+    def _select_optimal_pages(self, doc: fitz.Document, max_pages: int = 5) -> List[int]:
+        """
+        Select optimal pages for visual extraction.
+        
+        Args:
+            doc: PyMuPDF document object
+            max_pages: Maximum number of pages to select
+            
+        Returns:
+            List of page numbers (0-indexed)
+        """
+        selected_pages = set()
+        
+        # Always include title/abstract page
+        selected_pages.add(0)
+        
+        # Find figure/table pages
+        figure_pages = self._detect_figure_pages_intelligent(doc)
+        # Add up to 3 figure pages
+        for page_num, score in figure_pages[:3]:
+            selected_pages.add(page_num)
+        
+        # Add conclusion/results pages (last few pages)
+        if len(doc) > 3:
+            selected_pages.add(len(doc) - 1)  # Last page
+            if len(doc) > 4:
+                selected_pages.add(len(doc) - 2)  # Second to last
+        
+        # Add methodology page (typically in the middle third)
+        if len(doc) > 6:
+            method_page = len(doc) // 3
+            selected_pages.add(method_page)
+        
+        # Convert to sorted list and limit to max_pages
+        return sorted(list(selected_pages))[:max_pages]
+    
+    def _detect_figure_pages_intelligent(self, doc: fitz.Document) -> List[Tuple[int, int]]:
+        """
+        Intelligently detect pages containing figures and tables.
+        
+        Args:
+            doc: PyMuPDF document object
+            
+        Returns:
+            List of (page_number, score) tuples sorted by score
+        """
+        figure_pages = []
+        
+        # Keywords indicating figures/tables with weights
+        indicators = {
+            'figure': 3,
+            'table': 3,
+            'fig.': 3,
+            'tab.': 3,
+            '図': 3,
+            '表': 3,
+            'graph': 2,
+            'chart': 2,
+            'plot': 2,
+            'diagram': 2,
+            'グラフ': 2,
+            'experiment': 1,
+            '実験': 1,
+            'result': 1,
+            '結果': 1,
+        }
+        
+        for page_num in range(len(doc)):
+            try:
+                page = doc[page_num]
+                text = page.get_text().lower()
+                
+                # Calculate score based on indicators
+                score = 0
+                for indicator, weight in indicators.items():
+                    count = text.count(indicator)
+                    score += count * weight
+                
+                # Bonus for pages with less text (likely to have figures)
+                text_density = len(text.strip()) / (page.rect.width * page.rect.height)
+                if text_density < 0.5:  # Low text density
+                    score += 2
+                
+                if score >= 2:  # Threshold for considering as figure page
+                    figure_pages.append((page_num, score))
+                    
+            except Exception as e:
+                logger.warning(f"Error analyzing page {page_num}: {e}")
+                continue
+        
+        # Sort by score (descending)
+        figure_pages.sort(key=lambda x: x[1], reverse=True)
+        
+        logger.debug(f"Detected {len(figure_pages)} figure pages")
+        return figure_pages
