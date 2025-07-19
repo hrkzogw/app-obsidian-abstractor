@@ -1,0 +1,86 @@
+# Obsidian Abstractor Configuration
+# Copy this file to config.yaml and update with your settings
+
+# API Configuration
+api:
+  # Google AI API key for Gemini
+  google_ai_key: "your-gemini-api-key-here"
+  # Model to use (gemini-pro, gemini-pro-vision)
+  model: "gemini-pro"
+  # Maximum tokens for response
+  max_tokens: 2048
+
+# Watch Configuration
+watch:
+  # Folders to monitor for new PDFs
+  folders:
+    - "~/Downloads/Papers"
+    - "~/Desktop/Research"
+  # File patterns to match
+  patterns:
+    - "*.pdf"
+    - "*.PDF"
+  # Patterns to ignore
+  ignore_patterns:
+    - "*draft*"
+    - "*tmp*"
+    - ".*"  # Hidden files
+
+# Output Configuration
+output:
+  # Path to your Obsidian vault
+  vault_path: "~/Documents/Obsidian/MyVault"
+  # Folder within vault for new notes (relative to vault root)
+  inbox_folder: "Research/inbox"
+  # Note template to use
+  template: "default"
+  # File naming pattern
+  file_pattern: "{year}_{first_author}_{title_short}"
+
+# Abstractor Settings
+abstractor:
+  # Output language (ja: Japanese, en: English)
+  language: "ja"
+  # Maximum length of abstract in characters
+  max_length: 1000
+  # Include citations in the abstract
+  include_citations: true
+  # Include figure descriptions
+  include_figures: true
+  # Extract and list keywords
+  extract_keywords: true
+
+# PDF Processing
+pdf:
+  # Maximum file size in MB
+  max_size_mb: 100
+  # Text extraction method (auto, layout, simple)
+  extraction_mode: "auto"
+  # Handle encrypted PDFs
+  handle_encrypted: false
+
+# Advanced Settings
+advanced:
+  # Enable caching of processed PDFs
+  pdf_cache: true
+  # Cache directory
+  cache_dir: "~/.cache/obsidian-abstractor"
+  # Logging level (DEBUG, INFO, WARNING, ERROR)
+  log_level: "INFO"
+  # Log file location
+  log_file: "~/.obsidian-abstractor/logs/app.log"
+  # Number of worker threads
+  workers: 2
+  # Retry failed PDFs
+  retry_failed: true
+  # Retry attempts
+  retry_attempts: 3
+
+# Rate Limiting
+rate_limit:
+  # Requests per minute
+  requests_per_minute: 60
+  # Delay between requests (seconds)
+  request_delay: 1
+  # Batch size for multiple PDFs
+  batch_size: 5

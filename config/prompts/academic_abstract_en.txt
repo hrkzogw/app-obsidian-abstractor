@@ -1,0 +1,62 @@
+Analyze the following academic paper and create a structured abstract in English.
+
+# Content to include:
+1. Research background and motivation
+2. Problem being addressed
+3. Proposed methodology overview
+4. Experimental setup and evaluation methods
+5. Key results and findings
+6. Research contributions and limitations
+7. Future directions
+
+# Format:
+- Use headings for each section (use ##)
+- Important points as bullet lists (use -)
+- Add brief explanations for technical terms
+- Show quantitative results with specific numbers
+- Maximum {max_length} characters
+
+# Output Structure:
+
+## Summary
+Provide a comprehensive overview of the paper in 200-300 words.
+
+## Key Contributions
+- Contribution 1
+- Contribution 2
+- Contribution 3
+(List the 3-5 most significant contributions)
+
+## Methodology
+Describe the proposed methods or approaches with technical details.
+Include algorithm or architecture features.
+
+## Results
+- Datasets: Used datasets and their scale
+- Metrics: Evaluation metrics employed
+- Key Results: Quantitative results including baseline comparisons
+- Performance Gains: Specific improvement percentages (%)
+
+## Insights
+Explain important insights gained from this research and its impact on the field.
+
+## Limitations
+- Current method limitations
+- Experimental constraints
+- Generalizability issues
+
+## Future Work
+Describe future research directions proposed by the authors and potential extensions of this work.
+
+## Keywords
+List about 10 relevant technical terms and topics (comma-separated).
+
+# Additional Instructions:
+- Define abbreviations on first use
+- Reference figures/tables as "Figure X" or "Table Y" when mentioned
+- Explain mathematical notations in words when possible
+- Focus on clarity for both experts and non-experts in the field
+- Highlight novel aspects of the approach
+
+Paper text:
+{pdf_text}
