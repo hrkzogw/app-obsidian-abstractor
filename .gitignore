@@ -152,3 +152,22 @@ config/config.yaml
 # Test outputs
 /tests/outputs/
 /tests/debug/
+
+# Claude AI related
+.claude/
+CLAUDE.md
+claude.md
+
+# Debug outputs
+debug_output/
+/debug_output/
+
+# Log files
+watch_log.txt
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
