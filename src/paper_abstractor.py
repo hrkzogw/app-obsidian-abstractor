@@ -392,8 +392,8 @@ class PaperAbstractor:
             title=title,
             authors=authors,
             year=year,
-            page_count=page_count,
-            pdf_filename=pdf_filename
+            pdf_filename=pdf_filename,
+            current_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         )
         
         # Create generation config

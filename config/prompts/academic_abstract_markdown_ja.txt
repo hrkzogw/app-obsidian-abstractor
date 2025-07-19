@@ -9,23 +9,22 @@
 ---
 title: [論文タイトル]
 authors:
-- [著者1]
-- [著者2]
-year: '[出版年]'
+- [著者1の姓, 名のイニシャル.]
+- [著者2の姓, 名のイニシャル.]
+year-published: '[出版年]'
 journal: [ジャーナル名]
-doi: [DOI]
-tags:
-- [タグ1]
-- [タグ2]
-- academic
-- research-paper
-- japanese
-created: '[現在日付 YYYY-MM-DD形式]'
+volume: [巻数]
+issue: [号数]
+pages: [開始ページ-終了ページ]
+doi: https://doi.org/[DOI番号]
+language: [論文の言語コード（en/ja等）]
+keywords:
+- [研究内容に関連するキーワード1]
+- [研究内容に関連するキーワード2]
+citation: '[APA形式またはJPA形式の書誌情報]'
+created: '{current_date}'
 pdf-path: '[[PDFファイル名]]'
 abstract-by: gemini-2.0-flash-001
-language: ja
-page-count: [ページ数]
-file-size-mb: [ファイルサイズ]
 ---
 
 # [論文タイトル]
@@ -129,7 +128,17 @@ file-size-mb: [ファイルサイズ]
 ## 重要な指示
 
 1. **必ず上記の完全なMarkdown形式で出力**してください
-2. **YAMLフロントマターを含む完全なドキュメント**を生成してください
+2. **YAMLフロントマターを含む完全なドキュメント**を生成してください。各フィールドの記載方法：
+   - **language**: 論文本文の言語を判定し、適切な言語コードを記載（英語論文は「en」、日本語論文は「ja」）
+   - **authors**: APA形式（姓, 名のイニシャル.）で記載。例：「María J. Gutiérrez-Cobo」→「Gutiérrez-Cobo, M. J.」
+   - **volume, issue, pages**: 論文テキストから巻号・ページ情報を抽出。例：「72(10), 2508-2522」から volume: 72, issue: 10, pages: 2508-2522
+   - **doi**: 必ずhttps://doi.org/で始まるURL形式で記載
+   - **keywords**: 論文の研究内容に直接関連するキーワードのみを記載。「academic」「research-paper」「japanese」などの汎用的なタグは含めない
+   - **citation**: 論文の言語に応じて以下の形式で記載：
+     - 英語論文：APA 7th edition形式
+       例：Gutiérrez-Cobo, M. J., Luque, D., Most, S. B., Fernández-Berrocal, P., & Le Pelley, M. E. (2019). Reward and emotion influence attentional bias in rapid serial visual presentation. Quarterly Journal of Experimental Psychology, 72(10), 2508-2522. https://doi.org/10.1177/1747021819840615
+     - 日本語論文：日本心理学会の投稿の手引き形式
+       例：山田太郎・鈴木花子 (2023). 認知的負荷が注意配分に与える影響 心理学研究, 94(3), 234-245.
 3. **各セクションは詳細かつ具体的**に記述してください
 4. **実験の詳細は省略せず**、参加者数、統計手法等を必ず含めてください
 5. **最大{max_length}文字**で要約してください
@@ -176,8 +185,8 @@ file-size-mb: [ファイルサイズ]
 タイトル: {title}
 著者: {authors}
 年: {year}
-ページ数: {page_count}
 PDFファイル名: {pdf_filename}
+現在日付: {current_date}
 
 論文テキスト：
 {pdf_text}

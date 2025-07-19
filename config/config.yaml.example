@@ -10,12 +10,32 @@ api:
   # Maximum tokens for response
   max_tokens: 2048
 
+# Vault Configuration
+vault:
+  # Path to your Obsidian vault
+  path: "~/Documents/Obsidian/MyVault"
+
+# Global Output Configuration
+output:
+  # Default output path for all operations
+  # Supports vault:// prefix for vault-relative paths
+  default_path: "vault://Processed/Inbox"
+  # Note template to use
+  template: "default"
+  # File naming pattern
+  file_pattern: "{year}_{first_author}_{title_short}"
+
 # Watch Configuration
 watch:
   # Folders to monitor for new PDFs
+  # Supports: vault:// prefix, ~/ for home, absolute paths
   folders:
     - "~/Downloads/Papers"
+    - "vault://External/PDFs"
     - "~/Desktop/Research"
+  # Output path for watch operation (overrides global default)
+  # Supports placeholders: {{year}}, {{month}}, {{day}}
+  output_path: "vault://Papers/{{year}}/{{month}}"
   # File patterns to match
   patterns:
     - "*.pdf"
@@ -25,17 +45,6 @@ watch:
     - "*draft*"
     - "*tmp*"
     - ".*"  # Hidden files
-
-# Output Configuration
-output:
-  # Path to your Obsidian vault
-  vault_path: "~/Documents/Obsidian/MyVault"
-  # Folder within vault for new notes (relative to vault root)
-  inbox_folder: "Research/inbox"
-  # Note template to use
-  template: "default"
-  # File naming pattern
-  file_pattern: "{year}_{first_author}_{title_short}"
 
 # Abstractor Settings
 abstractor:
@@ -58,6 +67,56 @@ pdf:
   extraction_mode: "auto"
   # Handle encrypted PDFs
   handle_encrypted: false
+  # Enable visual extraction (multimodal AI)
+  enable_visual_extraction: false
+  # Maximum pages for image extraction
+  max_image_pages: 3
+  # DPI for image extraction
+  image_dpi: 150
+
+# PDF Filtering
+pdf_filter:
+  # Enable PDF filtering
+  enabled: false
+  # Only process academic papers
+  academic_only: false
+  # Minimum score to be considered academic paper
+  academic_threshold: 50
+  # Page count requirements
+  min_pages: 5
+  max_pages: 500
+  # File size requirements (MB)
+  min_size_mb: 0.1
+  max_size_mb: 100
+  # Quarantine folder for non-academic PDFs (optional)
+  # quarantine_folder: "~/Documents/PDFs/Quarantine"
+  # Enable quarantine (move non-academic PDFs)
+  quarantine_enabled: false
+
+# Scoring Rules for PDF Filter
+scoring_rules:
+  # Positive scoring patterns
+  positive:
+    # DOI pattern found (default: 50)
+    doi_found: 50
+    # Abstract section found (default: 20)
+    abstract_found: 20
+    # References section found (default: 20)
+    references_found: 20
+    # Academic publisher detected (default: 20)
+    academic_publisher: 20
+    # Typical page count (8-40 pages) (default: 15)
+    pages_in_range: 15
+  # Negative scoring patterns
+  negative:
+    # Invoice pattern in filename (default: -100)
+    invoice_in_filename: -100
+    # Receipt pattern in filename (default: -100)
+    receipt_in_filename: -100
+    # Presentation/slides pattern (default: -50)
+    presentation_in_filename: -50
+    # Manual/guide pattern (default: -70)
+    manual_in_filename: -70
 
 # Advanced Settings
 advanced:

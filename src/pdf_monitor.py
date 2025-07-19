@@ -19,6 +19,8 @@ from watchdog.events import FileSystemEventHandler, FileCreatedEvent
 from .pdf_extractor import PDFExtractor
 from .paper_abstractor import PaperAbstractor
 from .note_formatter import NoteFormatter
+from .pdf_filter import PDFFilter
+from .utils.path_resolver import PathResolver, create_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -69,20 +71,35 @@ class PDFEventHandler(FileSystemEventHandler):
 class PDFMonitor:
     """Monitor folders for new PDF files and process them."""
     
-    def __init__(self, config: Dict[str, Any], output_path: Path):
+    def __init__(self, config: Dict[str, Any], output_path: str):
         """
         Initialize PDF monitor.
         
         Args:
             config: Configuration dictionary
-            output_path: Output directory for generated notes
+            output_path: Output path (can be vault-relative or absolute)
         """
         self.config = config
-        self.output_path = Path(output_path)
+        self.path_resolver = create_resolver(config)
+        
+        # Resolve output path with placeholders
+        self.output_path_template = output_path
+        self.output_path = self.path_resolver.resolve_with_placeholders(output_path)
         
         # Watch settings
         watch_config = config.get('watch', {})
-        self.folders = [Path(f).expanduser() for f in watch_config.get('folders', [])]
+        
+        # Resolve watch folders
+        folder_paths = watch_config.get('folders', [])
+        self.folders = []
+        for folder_str in folder_paths:
+            try:
+                resolved_folder = self.path_resolver.resolve_path(folder_str)
+                self.folders.append(resolved_folder)
+                logger.info(f"Resolved watch folder: {folder_str} -> {resolved_folder}")
+            except Exception as e:
+                logger.warning(f"Failed to resolve folder '{folder_str}': {e}")
+        
         self.patterns = watch_config.get('patterns', ['*.pdf', '*.PDF'])
         self.ignore_patterns = watch_config.get('ignore_patterns', ['*draft*', '*tmp*', '.*'])
         
@@ -101,6 +118,7 @@ class PDFMonitor:
         self.pdf_extractor = PDFExtractor(config)
         self.paper_abstractor = PaperAbstractor(config)
         self.note_formatter = NoteFormatter(config)
+        self.pdf_filter = PDFFilter(config)
         
         # Processing queue and state
         self.processing_queue: asyncio.Queue = asyncio.Queue()
@@ -118,47 +136,78 @@ class PDFMonitor:
         """
         logger.info(f"Starting PDF monitor for folders: {self.folders}")
         
-        # Validate folders
-        for folder in self.folders:
-            if not folder.exists():
-                logger.warning(f"Folder does not exist: {folder}")
-                folder.mkdir(parents=True, exist_ok=True)
+        try:
+            # Validate folders
+            for folder in self.folders:
+                if not folder.exists():
+                    logger.warning(f"Folder does not exist: {folder}")
+                    folder.mkdir(parents=True, exist_ok=True)
+            
+            # Ensure output directory exists
+            self.output_path.mkdir(parents=True, exist_ok=True)
+            
+            self.is_running = True
+            
+            # Start file system observer
+            self.observer = Observer()
+            handler = PDFEventHandler(self)
+            
+            for folder in self.folders:
+                self.observer.schedule(handler, str(folder), recursive=True)
+            
+            self.observer.start()
+            logger.info("File system observer started")
+            
+            # Start worker tasks
+            for i in range(self.workers):
+                task = asyncio.create_task(self._process_queue_worker(i))
+                self.workers_tasks.append(task)
+            
+            logger.info(f"Started {self.workers} worker tasks")
+            
+            # Initial scan
+            await self._initial_scan()
+            
+            if daemon:
+                # Daemon mode: continuous monitoring
+                logger.info("Monitor started in daemon mode")
+                try:
+                    while self.is_running:
+                        await asyncio.sleep(1)
+                except KeyboardInterrupt:
+                    logger.info("Received interrupt signal")
+            else:
+                # Non-daemon mode: process initial scan files only
+                logger.info("Monitor started in non-daemon mode")
+                
+                # Record initial file count
+                initial_file_count = self.processing_queue.qsize()
+                
+                if initial_file_count > 0:
+                    logger.info(f"Processing {initial_file_count} files from initial scan...")
+                    try:
+                        # Wait for all items to be processed with timeout
+                        await asyncio.wait_for(
+                            self.processing_queue.join(),
+                            timeout=1800.0  # 30 minutes timeout
+                        )
+                        logger.info("All files processed successfully")
+                    except asyncio.TimeoutError:
+                        logger.error("Processing timed out after 30 minutes")
+                        raise
+                else:
+                    logger.info("No files found in initial scan")
         
-        # Ensure output directory exists
-        self.output_path.mkdir(parents=True, exist_ok=True)
-        
-        self.is_running = True
-        
-        # Start file system observer
-        self.observer = Observer()
-        handler = PDFEventHandler(self)
-        
-        for folder in self.folders:
-            self.observer.schedule(handler, str(folder), recursive=True)
-        
-        self.observer.start()
-        logger.info("File system observer started")
-        
-        # Start worker tasks
-        for i in range(self.workers):
-            task = asyncio.create_task(self._process_queue_worker(i))
-            self.workers_tasks.append(task)
-        
-        logger.info(f"Started {self.workers} worker tasks")
-        
-        # Initial scan
-        await self._initial_scan()
-        
-        if daemon:
-            # Run until interrupted
-            try:
-                while self.is_running:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                logger.info("Received interrupt signal")
+        except KeyboardInterrupt:
+            logger.info("Interrupt signal received, shutting down...")
+        except Exception as e:
+            logger.error(f"Error during monitoring: {e}", exc_info=True)
+            raise
+        finally:
+            # Safe shutdown
+            if self.is_running:
                 await self.stop()
-        else:
-            logger.info("Monitor started in non-daemon mode")
+            logger.info("Monitor has been shut down")
     
     async def stop(self):
         """Stop monitoring."""
@@ -201,17 +250,38 @@ class PDFMonitor:
         await self.processing_queue.put(pdf_path)
         logger.info(f"Added to queue: {pdf_path}")
     
-    async def process_file(self, pdf_path: Path) -> Optional[Path]:
+    async def process_file(self, pdf_path: Path, force: bool = False) -> Optional[Path]:
         """
         Process a single PDF file.
         
         Args:
             pdf_path: Path to the PDF file
+            force: Force processing even if filtered out
             
         Returns:
             Path to the generated note, or None if processing failed
         """
         try:
+            # Apply PDF filter unless forced
+            if not force and self.pdf_filter.enabled:
+                filter_result = self.pdf_filter.filter_pdf(pdf_path)
+                
+                if not filter_result.accepted:
+                    logger.info(f"Filtered out: {pdf_path}")
+                    for reason in filter_result.reasons:
+                        logger.info(f"  - {reason}")
+                    logger.info(f"  Total score: {filter_result.score}")
+                    
+                    # Handle quarantine if enabled
+                    if self.config.get('pdf_filter', {}).get('quarantine_enabled', False):
+                        quarantine_folder = self.config.get('pdf_filter', {}).get('quarantine_folder')
+                        if quarantine_folder:
+                            await self._quarantine_file(pdf_path, Path(quarantine_folder).expanduser(), filter_result)
+                    
+                    return None
+                else:
+                    logger.info(f"Accepted: {pdf_path} (score: {filter_result.score})")
+            
             logger.info(f"Processing: {pdf_path}")
             
             # Extract PDF data
@@ -225,7 +295,21 @@ class PDFMonitor:
             
             # Generate filename
             filename = self.note_formatter.generate_filename(pdf_data, pdf_path)
-            note_path = self.output_path / f"{filename}.md"
+            
+            # Resolve output path with current date and PDF metadata
+            context = {
+                'author': pdf_data.get('metadata', {}).get('author', 'Unknown').split(',')[0].strip(),
+                'paper_year': pdf_data.get('metadata', {}).get('year', 'Unknown'),
+                'title': pdf_data.get('metadata', {}).get('title', pdf_path.stem)[:30],
+            }
+            current_output_path = self.path_resolver.resolve_with_placeholders(
+                self.output_path_template, context
+            )
+            
+            # Ensure output directory exists
+            current_output_path.mkdir(parents=True, exist_ok=True)
+            
+            note_path = current_output_path / f"{filename}.md"
             
             # Ensure unique filename
             counter = 1
@@ -250,6 +334,29 @@ class PDFMonitor:
             logger.error(f"Failed to process {pdf_path}: {e}", exc_info=True)
             return None
     
+    async def _quarantine_file(self, pdf_path: Path, quarantine_folder: Path, filter_result):
+        """Move filtered file to quarantine folder."""
+        try:
+            quarantine_folder.mkdir(parents=True, exist_ok=True)
+            
+            # Create info file with filter details
+            info_path = quarantine_folder / f"{pdf_path.stem}_filter_info.txt"
+            info_content = f"File: {pdf_path.name}\n"
+            info_content += f"Filtered at: {datetime.now().isoformat()}\n"
+            info_content += f"Score: {filter_result.score}\n"
+            info_content += f"Threshold: {self.pdf_filter.academic_threshold}\n"
+            info_content += "\nReasons:\n"
+            for reason in filter_result.reasons:
+                info_content += f"  - {reason}\n"
+            
+            async with aiofiles.open(info_path, 'w', encoding='utf-8') as f:
+                await f.write(info_content)
+            
+            logger.info(f"Quarantine info saved: {info_path}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to quarantine {pdf_path}: {e}")
+    
     async def _process_queue_worker(self, worker_id: int):
         """Worker task to process PDFs from the queue."""
         logger.info(f"Worker {worker_id} started")
@@ -263,14 +370,20 @@ class PDFMonitor:
                 )
                 
                 logger.info(f"Worker {worker_id} processing: {pdf_path}")
-                await self.process_file(pdf_path)
-                
+                try:
+                    await self.process_file(pdf_path)
+                finally:
+                    # Notify queue that task is done
+                    self.processing_queue.task_done()
+                    
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Worker {worker_id} error: {e}", exc_info=True)
+                # Mark task as done even on error
+                self.processing_queue.task_done()
         
         logger.info(f"Worker {worker_id} stopped")
     

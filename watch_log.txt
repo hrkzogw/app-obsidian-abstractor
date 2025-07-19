@@ -1,0 +1,180 @@
+[0;36mUsing existing virtual environment[0m
+✓ Configuration loaded
+Starting Obsidian Abstractor...
+Watching folders: tests/91_articles
+Output path: tests/00_inbox
+[18:23:30] DEBUG    Using selector: KqueueSelector         selector_events.py:54
+           DEBUG    Resolved relative path: tests/00_inbox   path_resolver.py:89
+                    ->                                                          
+                    /Users/hirokazu/git/app-obsidian-abstrac                    
+                    tor/tests/00_inbox                                          
+           DEBUG    Resolved relative path:                  path_resolver.py:89
+                    tests/91_articles ->                                        
+                    /Users/hirokazu/git/app-obsidian-abstrac                    
+                    tor/tests/91_articles                                       
+           INFO     Resolved watch folder: tests/91_articles   pdf_monitor.py:99
+                    ->                                                          
+                    /Users/hirokazu/git/app-obsidian-abstracto                  
+                    r/tests/91_articles                                         
+           INFO     Starting PDF monitor for folders:         pdf_monitor.py:137
+                    [PosixPath('/Users/hirokazu/git/app-obsid                   
+                    ian-abstractor/tests/91_articles')]                         
+           INFO     File system observer started              pdf_monitor.py:158
+           INFO     Started 2 worker tasks                    pdf_monitor.py:165
+           INFO     Performing initial scan...                pdf_monitor.py:355
+           INFO     Found 5 unprocessed PDF files             pdf_monitor.py:378
+           INFO     Worker 0 started                          pdf_monitor.py:331
+           INFO     Worker 1 started                          pdf_monitor.py:331
+[18:23:32] INFO     Added to queue:                           pdf_monitor.py:220
+                    /Users/hirokazu/git/app-obsidian-abstract                   
+                    or/tests/91_articles/Weisberg and                           
+                    Newcombe 2018 - Cognitive maps - Some                       
+                    people make them, some people                               
+                    struggle.pdf                                                
+           INFO     Worker 0 processing:                      pdf_monitor.py:341
+                    /Users/hirokazu/git/app-obsidian-abstract                   
+                    or/tests/91_articles/Weisberg and                           
+                    Newcombe 2018 - Cognitive maps - Some                       
+                    people make them, some people                               
+                    struggle.pdf                                                
+           INFO     Processing:                               pdf_monitor.py:254
+                    /Users/hirokazu/git/app-obsidian-abstract                   
+                    or/tests/91_articles/Weisberg and                           
+                    Newcombe 2018 - Cognitive maps - Some                       
+                    people make them, some people                               
+                    struggle.pdf                                                
+[18:23:33] INFO     AFC is enabled with max remote calls: 10.     models.py:5730
+           DEBUG    connect_tcp.started                             _trace.py:47
+                    host='generativelanguage.googleapis.com'                    
+                    port=443 local_address=None timeout=None                    
+                    socket_options=None                                         
+           DEBUG    connect_tcp.complete                            _trace.py:47
+                    return_value=<httpcore._backends.sync.SyncStrea             
+                    m object at 0x10fd7be90>                                    
+           DEBUG    start_tls.started ssl_context=<ssl.SSLContext   _trace.py:47
+                    object at 0x10fbbc0e0>                                      
+                    server_hostname='generativelanguage.googleapis.             
+                    com' timeout=None                                           
+           DEBUG    start_tls.complete                              _trace.py:47
+                    return_value=<httpcore._backends.sync.SyncStrea             
+                    m object at 0x10fa538d0>                                    
+           DEBUG    send_request_headers.started request=<Request   _trace.py:47
+                    [b'POST']>                                                  
+           DEBUG    send_request_headers.complete                   _trace.py:47
+           DEBUG    send_request_body.started request=<Request      _trace.py:47
+                    [b'POST']>                                                  
+           DEBUG    send_request_body.complete                      _trace.py:47
+           DEBUG    receive_response_headers.started                _trace.py:47
+                    request=<Request [b'POST']>                                 
+[18:23:34] INFO     Added to queue:                           pdf_monitor.py:220
+                    /Users/hirokazu/git/app-obsidian-abstract                   
+                    or/tests/91_articles/Gutiérrez-Cobo et                      
+                    al. 2019 - Reward and emotion influence                     
+                    attentional bias in rapid serial visual                     
+                    presentation.pdf                                            
+           INFO     Worker 1 processing:                      pdf_monitor.py:341
+                    /Users/hirokazu/git/app-obsidian-abstract                   
+                    or/tests/91_articles/Gutiérrez-Cobo et                      
+                    al. 2019 - Reward and emotion influence                     
+                    attentional bias in rapid serial visual                     
+                    presentation.pdf                                            
+           INFO     Processing:                               pdf_monitor.py:254
+                    /Users/hirokazu/git/app-obsidian-abstract                   
+                    or/tests/91_articles/Gutiérrez-Cobo et                      
+                    al. 2019 - Reward and emotion influence                     
+                    attentional bias in rapid serial visual                     
+                    presentation.pdf                                            
+[18:23:35] INFO     AFC is enabled with max remote calls: 10.     models.py:5730
+           DEBUG    connect_tcp.started                             _trace.py:47
+                    host='generativelanguage.googleapis.com'                    
+                    port=443 local_address=None timeout=None                    
+                    socket_options=None                                         
+           DEBUG    connect_tcp.complete                            _trace.py:47
+                    return_value=<httpcore._backends.sync.SyncStrea             
+                    m object at 0x10fd6ffd0>                                    
+           DEBUG    start_tls.started ssl_context=<ssl.SSLContext   _trace.py:47
+                    object at 0x10fbbc0e0>                                      
+                    server_hostname='generativelanguage.googleapis.             
+                    com' timeout=None                                           
+           DEBUG    start_tls.complete                              _trace.py:47
+                    return_value=<httpcore._backends.sync.SyncStrea             
+                    m object at 0x10fd6de90>                                    
+           DEBUG    send_request_headers.started request=<Request   _trace.py:47
+                    [b'POST']>                                                  
+           DEBUG    send_request_headers.complete                   _trace.py:47
+           DEBUG    send_request_body.started request=<Request      _trace.py:47
+                    [b'POST']>                                                  
+           DEBUG    send_request_body.complete                      _trace.py:47
+           DEBUG    receive_response_headers.started                _trace.py:47
+                    request=<Request [b'POST']>                                 
+[18:23:36] INFO     Added to queue:                           pdf_monitor.py:220
+                    /Users/hirokazu/git/app-obsidian-abstract                   
+                    or/tests/91_articles/Van Marcke and                         
+                    Desender 2025 - Context-dependent role of                   
+                    confidence in information-seeking.pdf                       
+[18:23:38] INFO     Added to queue:                           pdf_monitor.py:220
+                    /Users/hirokazu/git/app-obsidian-abstract                   
+                    or/tests/91_articles/Jonides et al. 2008                    
+                    - The mind and brain of short-term                          
+                    memory.pdf                                                  
+[18:23:40] INFO     Added to queue:                           pdf_monitor.py:220
+                    /Users/hirokazu/git/app-obsidian-abstract                   
+                    or/tests/91_articles/Wolffhechel et al.                     
+                    2014 - Interpretation of appearance - the                   
+                    effect of facial features on first                          
+                    impressions and personality.PDF                             
+           INFO     Monitor started in non-daemon mode        pdf_monitor.py:179
+           INFO     Worker 0 stopped                          pdf_monitor.py:351
+           INFO     Worker 1 stopped                          pdf_monitor.py:351
+[18:23:46] DEBUG    receive_response_headers.complete               _trace.py:47
+                    return_value=(b'HTTP/1.1', 200, b'OK',                      
+                    [(b'Content-Type', b'application/json;                      
+                    charset=UTF-8'), (b'Vary', b'Origin'),                      
+                    (b'Vary', b'X-Origin'), (b'Vary', b'Referer'),              
+                    (b'Content-Encoding', b'gzip'), (b'Date',                   
+                    b'Sat, 19 Jul 2025 09:23:45 GMT'), (b'Server',              
+                    b'scaffolding on HTTPServer2'),                             
+                    (b'X-XSS-Protection', b'0'),                                
+                    (b'X-Frame-Options', b'SAMEORIGIN'),                        
+                    (b'X-Content-Type-Options', b'nosniff'),                    
+                    (b'Server-Timing', b'gfet4t7; dur=12684'),                  
+                    (b'Alt-Svc', b'h3=":443";                                   
+                    ma=2592000,h3-29=":443"; ma=2592000'),                      
+                    (b'Transfer-Encoding', b'chunked')])                        
+           INFO     HTTP Request: POST                           _client.py:1025
+                    https://generativelanguage.googleapis.com/v1                
+                    beta/models/gemini-2.0-flash-001:generateCon                
+                    tent "HTTP/1.1 200 OK"                                      
+           DEBUG    receive_response_body.started request=<Request  _trace.py:47
+                    [b'POST']>                                                  
+           DEBUG    receive_response_body.complete                  _trace.py:47
+           DEBUG    response_closed.started                         _trace.py:47
+           DEBUG    response_closed.complete                        _trace.py:47
+           INFO     AFC remote call 1 is done.                    models.py:5741
+[18:23:56] DEBUG    receive_response_headers.complete               _trace.py:47
+                    return_value=(b'HTTP/1.1', 200, b'OK',                      
+                    [(b'Content-Type', b'application/json;                      
+                    charset=UTF-8'), (b'Vary', b'Origin'),                      
+                    (b'Vary', b'X-Origin'), (b'Vary', b'Referer'),              
+                    (b'Content-Encoding', b'gzip'), (b'Date',                   
+                    b'Sat, 19 Jul 2025 09:23:56 GMT'), (b'Server',              
+                    b'scaffolding on HTTPServer2'),                             
+                    (b'X-XSS-Protection', b'0'),                                
+                    (b'X-Frame-Options', b'SAMEORIGIN'),                        
+                    (b'X-Content-Type-Options', b'nosniff'),                    
+                    (b'Server-Timing', b'gfet4t7; dur=21131'),                  
+                    (b'Alt-Svc', b'h3=":443";                                   
+                    ma=2592000,h3-29=":443"; ma=2592000'),                      
+                    (b'Transfer-Encoding', b'chunked')])                        
+           INFO     HTTP Request: POST                           _client.py:1025
+                    https://generativelanguage.googleapis.com/v1                
+                    beta/models/gemini-2.0-flash-001:generateCon                
+                    tent "HTTP/1.1 200 OK"                                      
+           DEBUG    receive_response_body.started request=<Request  _trace.py:47
+                    [b'POST']>                                                  
+           DEBUG    receive_response_body.complete                  _trace.py:47
+           DEBUG    response_closed.started                         _trace.py:47
+           DEBUG    response_closed.complete                        _trace.py:47
+           DEBUG    close.started                                   _trace.py:47
+           DEBUG    close.complete                                  _trace.py:47
+           INFO     AFC remote call 1 is done.                    models.py:5741

@@ -25,14 +25,13 @@ keywords = ["obsidian", "pdf", "academic", "paper", "ai", "summarization", "gemi
 
 dependencies = [
     "PyMuPDF>=1.23.0",
-    "google-generativeai>=0.3.0",
+    "google-genai>=0.7.0",
     "watchdog>=3.0.0",
     "pyyaml>=6.0",
     "click>=8.1.0",
     "rich>=13.0.0",
     "python-dateutil>=2.8.0",
     "aiofiles>=23.0.0",
-    "asyncio>=3.4.3",
 ]
 
 [project.optional-dependencies]

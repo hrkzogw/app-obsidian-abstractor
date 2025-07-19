@@ -10,6 +10,7 @@ import asyncio
 import logging
 import click
 from pathlib import Path
+from datetime import datetime
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
@@ -20,6 +21,8 @@ from .pdf_monitor import PDFMonitor
 from .pdf_extractor import PDFExtractor
 from .paper_abstractor import PaperAbstractor
 from .note_formatter import NoteFormatter
+from .pdf_filter import PDFFilter
+from .utils.path_resolver import PathResolver, create_resolver
 
 console = Console()
 
@@ -28,17 +31,42 @@ def setup_logging(verbose: bool):
     """Set up logging configuration."""
     level = logging.DEBUG if verbose else logging.INFO
     
-    # Configure rich handler
+    # Create logs directory
+    log_dir = Path("./logs")
+    log_dir.mkdir(exist_ok=True)
+    
+    # Create file handler with date-based filename
+    log_filename = f"abstractor_{datetime.now().strftime('%Y%m%d')}.log"
+    file_handler = logging.FileHandler(
+        log_dir / log_filename,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.DEBUG)
+    
+    # File formatter with more detail
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    file_handler.setFormatter(file_formatter)
+    
+    # Console handler with rich formatting
+    console_handler = RichHandler(console=console, rich_tracebacks=True)
+    console_handler.setLevel(level)
+    
+    # Configure root logger
     logging.basicConfig(
-        level=level,
+        level=logging.DEBUG,  # Set root to DEBUG, handlers control their own levels
         format="%(message)s",
         datefmt="[%X]",
-        handlers=[RichHandler(console=console, rich_tracebacks=True)]
+        handlers=[console_handler, file_handler]
     )
     
     # Reduce noise from some libraries
     logging.getLogger("watchdog").setLevel(logging.WARNING)
     logging.getLogger("google").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @click.group()
@@ -49,18 +77,15 @@ def cli():
 
 
 @cli.command()
-@click.argument('folders', nargs=-1, type=click.Path(exists=True), required=True)
-@click.option('--output', '-o', type=click.Path(), required=True, help='Output folder in Obsidian vault')
+@click.argument('folders', nargs=-1, type=click.Path(exists=False), required=False)
+@click.option('--output', '-o', type=click.Path(exists=False), required=False, help='Output folder in Obsidian vault')
 @click.option('--config', '-c', type=click.Path(exists=True), help='Configuration file path')
 @click.option('--daemon', '-d', is_flag=True, help='Run as daemon in background')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
-def watch(folders, output, config, daemon, verbose):
+@click.option('--show-config', is_flag=True, help='Show current configuration and exit')
+def watch(folders, output, config, daemon, verbose, show_config):
     """Watch folders for new PDF files and process them."""
     setup_logging(verbose)
-    
-    console.print("[bold blue]Starting Obsidian Abstractor...[/bold blue]")
-    console.print(f"[cyan]Watching folders:[/cyan] {', '.join(folders)}")
-    console.print(f"[cyan]Output folder:[/cyan] {output}")
     
     # Load configuration
     try:
@@ -70,13 +95,87 @@ def watch(folders, output, config, daemon, verbose):
         console.print(f"[red]Failed to load configuration: {e}[/red]")
         sys.exit(1)
     
-    # Update watch folders in config
+    # Create path resolver
+    resolver = create_resolver(config_loader.config)
+    
+    # Determine folders to watch
+    watch_folders = []
     if folders:
-        config_loader.config['watch']['folders'] = list(folders)
+        # Use command-line folders
+        watch_folders = list(folders)
+    else:
+        # Use folders from config
+        config_folders = config_loader.config.get('watch', {}).get('folders', [])
+        if not config_folders:
+            console.print("[red]No folders specified. Use command line arguments or set 'watch.folders' in config.[/red]")
+            sys.exit(1)
+        watch_folders = config_folders
+    
+    # Determine output path
+    output_path = None
+    if output:
+        # Use command-line output
+        output_path = output
+    else:
+        # Try watch-specific output first, then global default
+        watch_config = config_loader.config.get('watch', {})
+        output_path = watch_config.get('output_path') or watch_config.get('default_output')
+        
+        if not output_path:
+            # Fall back to global output config
+            output_config = config_loader.config.get('output', {})
+            output_path = output_config.get('default_path') or output_config.get('inbox_folder', 'inbox')
+    
+    # Show configuration and exit if requested
+    if show_config:
+        console.print("\n[bold cyan]Current Configuration:[/bold cyan]")
+        console.print("=" * 50)
+        
+        # Vault path
+        vault_path = config_loader.config.get('vault', {}).get('path') or \
+                    config_loader.config.get('output', {}).get('vault_path', 'Not set')
+        console.print(f"[cyan]Vault Path:[/cyan] {vault_path}")
+        
+        # Watch folders (resolve paths)
+        console.print("\n[cyan]Watch Folders:[/cyan]")
+        for folder in watch_folders:
+            try:
+                resolved = resolver.resolve_path(folder)
+                console.print(f"  • {folder} → {resolved}")
+            except Exception as e:
+                console.print(f"  • {folder} → [red]Error: {e}[/red]")
+        
+        # Output path
+        console.print(f"\n[cyan]Output Path:[/cyan] {output_path}")
+        try:
+            resolved_output = resolver.resolve_with_placeholders(output_path)
+            console.print(f"  → {resolved_output}")
+        except Exception as e:
+            console.print(f"  → [red]Error: {e}[/red]")
+        
+        # PDF Filter status
+        pdf_filter_enabled = config_loader.config.get('pdf_filter', {}).get('enabled', False)
+        if pdf_filter_enabled:
+            threshold = config_loader.config.get('pdf_filter', {}).get('academic_threshold', 50)
+            console.print(f"\n[cyan]PDF Filter:[/cyan] Enabled (threshold: {threshold})")
+        else:
+            console.print(f"\n[cyan]PDF Filter:[/cyan] Disabled")
+        
+        console.print("\n" + "=" * 50)
+        return
+    
+    console.print("[bold blue]Starting Obsidian Abstractor...[/bold blue]")
+    console.print(f"[cyan]Watching folders:[/cyan] {', '.join(watch_folders)}")
+    console.print(f"[cyan]Output path:[/cyan] {output_path}")
+    
+    # Update config with resolved values
+    config_loader.config['watch']['folders'] = watch_folders
+    if output_path:
+        config_loader.config['watch']['output_path'] = output_path
     
     # Create and start monitor
     async def run_monitor():
-        monitor = PDFMonitor(config_loader.config, output)
+        monitor = PDFMonitor(config_loader.config, output_path)
         try:
             await monitor.start(daemon=daemon)
         except KeyboardInterrupt:
@@ -157,8 +256,9 @@ def batch(folder, output, config, recursive, verbose):
 @click.argument('pdf_file', type=click.Path(exists=True), required=True)
 @click.option('--output', '-o', type=click.Path(), required=True, help='Output folder in Obsidian vault')
 @click.option('--config', '-c', type=click.Path(exists=True), help='Configuration file path')
+@click.option('--force', '-f', is_flag=True, help='Force processing even if filtered out')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
-def process(pdf_file, output, config, verbose):
+def process(pdf_file, output, config, force, verbose):
     """Process a single PDF file."""
     setup_logging(verbose)
     
@@ -182,6 +282,7 @@ def process(pdf_file, output, config, verbose):
         pdf_extractor = PDFExtractor(config_loader.config)
         paper_abstractor = PaperAbstractor(config_loader.config)
         note_formatter = NoteFormatter(config_loader.config)
+        pdf_filter = PDFFilter(config_loader.config)
         
         # Ensure output directory exists
         output_path.mkdir(parents=True, exist_ok=True)
@@ -191,6 +292,21 @@ def process(pdf_file, output, config, verbose):
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
+            # Apply PDF filter unless forced
+            if not force and pdf_filter.enabled:
+                task = progress.add_task("[cyan]Checking if PDF is academic paper...", total=None)
+                filter_result = pdf_filter.filter_pdf(pdf_path)
+                
+                if not filter_result.accepted:
+                    progress.update(task, description=f"[yellow]✗ Not an academic paper (score: {filter_result.score})")
+                    console.print("\n[yellow]This PDF was filtered out:[/yellow]")
+                    for reason in filter_result.reasons[:3]:  # Show top 3 reasons
+                        console.print(f"  • {reason}")
+                    console.print(f"\n[cyan]Tip:[/cyan] Use --force to process anyway")
+                    return
+                else:
+                    progress.update(task, description=f"[green]✓ Academic paper detected (score: {filter_result.score})")
+            
             # Extract PDF
             task = progress.add_task("[cyan]Extracting PDF content...", total=None)
             try:

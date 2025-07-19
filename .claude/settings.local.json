@@ -10,7 +10,9 @@
       "Bash(source:*)",
       "Bash(pip --version)",
       "Bash(pip install:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   }
