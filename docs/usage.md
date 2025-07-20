@@ -4,19 +4,17 @@ app-obsidian-abstractorの実践的な使い方を説明します。
 
 ## 📝 コマンドの使い分けについて
 
-このドキュメントでは `python -m src.main` を使って説明しますが、インストール方法によって使用するコマンドが異なります：
+このドキュメントでは `./run.sh` を使って説明します（Obsidian Vaultへのインストールを前提）。
 
-- **Vaultにインストールした場合**: `./run.sh` を使用してください
+- **Vaultにインストールした場合（推奨）**: `./run.sh` を使用します
   ```bash
   ./run.sh process file.pdf
   ```
 
-- **スタンドアロンインストールの場合**: `python -m src.main` を使用してください
+- **スタンドアロンインストールの場合**: `./run.sh` を `python -m src.main` に読み替えてください
   ```bash
   python -m src.main process file.pdf
   ```
-
-以降の例では `python -m src.main` で説明しますが、Vaultインストールの方は `./run.sh` に読み替えてください。
 
 ## ✨ ただ要約するだけではありません！
 
@@ -38,26 +36,26 @@ app-obsidian-abstractorは単なるPDF要約ツールではありません。以
 
 ```bash
 # 基本的な使い方
-python -m src.main process path/to/paper.pdf
+./run.sh process path/to/paper.pdf
 
 # 出力先を指定
-python -m src.main process paper.pdf --output ~/Obsidian/Papers
+./run.sh process paper.pdf --output ~/Obsidian/Papers
 
 # ドライラン（実際には処理しない）
-python -m src.main process paper.pdf --dry-run
+./run.sh process paper.pdf --dry-run
 ```
 
 #### フォルダの一括処理
 
 ```bash
 # フォルダ内の全PDFを処理
-python -m src.main batch ~/Downloads/Papers
+./run.sh batch ~/Downloads/Papers
 
 # 特定の出力先に保存
-python -m src.main batch ~/Downloads/Papers --output ~/Obsidian/inbox
+./run.sh batch ~/Downloads/Papers --output ~/Obsidian/inbox
 
 # 並列処理（デフォルト: 3）
-python -m src.main batch ~/Papers --workers 5
+./run.sh batch ~/Papers --workers 5
 ```
 
 ### フォルダ監視モード
@@ -66,23 +64,23 @@ python -m src.main batch ~/Papers --workers 5
 
 ```bash
 # 単一フォルダを監視
-python -m src.main watch ~/Downloads
+./run.sh watch ~/Downloads
 
 # 複数フォルダを監視
-python -m src.main watch ~/Downloads ~/Desktop/Research
+./run.sh watch ~/Downloads ~/Desktop/Research
 ```
 
 #### 高度な監視設定
 
 ```bash
 # 出力先を指定して監視
-python -m src.main watch ~/Papers --output ~/Obsidian/inbox
+./run.sh watch ~/Papers --output ~/Obsidian/inbox
 
 # デーモンモードで実行
-python -m src.main watch ~/Papers --daemon
+./run.sh watch ~/Papers --daemon
 
 # 設定ファイルの監視設定を使用
-python -m src.main watch  # config.yamlの設定を使用
+./run.sh watch  # config.yamlの設定を使用
 ```
 
 ## 📱 Shell Commands設定
@@ -173,6 +171,34 @@ start "" "{{vault_path}}/.obsidian/tools/abstractor/config/config.yaml"
    - 生成されたノートを開く
    - 必要に応じて編集
 
+## 🚀 設定ファイルを活用した使い方
+
+### オプションなしでの実行
+
+設定ファイルに`folder_settings`を適切に設定しておけば、コマンドラインオプションを指定せずに実行できます：
+
+```yaml
+# config.yamlの設定例
+folder_settings:
+  vault_path: "~/Documents/Obsidian/MyVault"
+  default_output: "vault://Abstracts"
+  watch_folders:
+    - "~/Downloads"
+    - "~/Desktop/Papers"
+  watch_output: "vault://Papers/{{year}}"
+```
+
+```bash
+# デフォルト出力先（Abstractsフォルダ）に出力
+./run.sh process paper.pdf
+
+# デフォルト出力先に一括処理
+./run.sh batch ~/Downloads/Papers
+
+# 設定されたフォルダを監視
+./run.sh watch
+```
+
 ## 🎨 高度な使い方
 
 ### カスタム出力パス
@@ -181,10 +207,10 @@ start "" "{{vault_path}}/.obsidian/tools/abstractor/config/config.yaml"
 
 ```bash
 # 年月でフォルダを分ける
-python -m src.main process paper.pdf --output "~/Obsidian/Papers/{{year}}/{{month}}"
+./run.sh process paper.pdf --output "~/Obsidian/Papers/{{year}}/{{month}}"
 
 # 著者名でフォルダを分ける
-python -m src.main process paper.pdf --output "~/Obsidian/Papers/{{author}}"
+./run.sh process paper.pdf --output "~/Obsidian/Papers/{{author}}"
 ```
 
 利用可能なプレースホルダー：
@@ -197,7 +223,7 @@ python -m src.main process paper.pdf --output "~/Obsidian/Papers/{{author}}"
 
 ```bash
 # vault://記法を使用
-python -m src.main process paper.pdf --output "vault://Papers/2025"
+./run.sh process paper.pdf --output "vault://Papers/2025"
 
 # 設定ファイルでも使用可能
 watch:
@@ -208,7 +234,7 @@ watch:
 
 ```bash
 # 大量のPDFを処理する場合
-python -m src.main batch ~/LargePDFCollection \
+./run.sh batch ~/LargePDFCollection \
   --workers 5 \
   --batch-size 10 \
   --progress
@@ -220,10 +246,10 @@ python -m src.main batch ~/LargePDFCollection \
 
 ```bash
 # 強制的に全PDFを処理
-python -m src.main process document.pdf --force
+./run.sh process document.pdf --force
 
 # フィルタリングをスキップ
-python -m src.main batch ~/PDFs --no-filter
+./run.sh batch ~/PDFs --no-filter
 ```
 
 ## 📊 処理結果の確認
@@ -242,7 +268,7 @@ tail -f ~/.obsidian/tools/abstractor/logs/abstractor_*.log
 
 ```bash
 # 処理済みファイルの確認
-python -m src.main stats
+./run.sh stats
 
 # 出力例:
 # 処理済みPDF: 156
@@ -315,10 +341,10 @@ pdf:
 
 ```bash
 # エラーが発生したPDFをスキップして続行
-python -m src.main batch ~/PDFs --skip-errors
+./run.sh batch ~/PDFs --skip-errors
 
 # エラーログを別ファイルに保存
-python -m src.main batch ~/PDFs --error-log errors.txt
+./run.sh batch ~/PDFs --error-log errors.txt
 ```
 
 ## 🎯 ユースケース別設定
@@ -327,7 +353,7 @@ python -m src.main batch ~/PDFs --error-log errors.txt
 
 ```bash
 # crontabに追加
-0 9 * * * cd /path/to/abstractor && python -m src.main watch ~/Downloads --daemon --hours 8
+0 9 * * * cd /path/to/abstractor && ./run.sh watch ~/Downloads --daemon --hours 8
 ```
 
 ### 研究プロジェクト別管理
@@ -345,7 +371,7 @@ projects:
 
 ```bash
 # 共有フォルダを監視
-python -m src.main watch /Volumes/SharedDrive/Papers \
+./run.sh watch /Volumes/SharedDrive/Papers \
   --output ~/Obsidian/SharedResearch \
   --notify  # 処理完了時に通知
 ```

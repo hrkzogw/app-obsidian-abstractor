@@ -9,8 +9,12 @@ import sys
 import asyncio
 import logging
 import click
+import uuid
+import yaml
+import re
 from pathlib import Path
 from datetime import datetime
+from typing import Dict, Any
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
@@ -23,6 +27,7 @@ from .paper_abstractor import PaperAbstractor
 from .note_formatter import NoteFormatter
 from .pdf_filter import PDFFilter
 from .utils.path_resolver import PathResolver, create_resolver
+from .utils.note_utils import extract_yaml_frontmatter, generate_filename_from_yaml, handle_rename
 from .paperpile_sync import sync_paperpile
 
 console = Console()
@@ -105,10 +110,14 @@ def watch(folders, output, config, daemon, verbose, show_config):
         # Use command-line folders
         watch_folders = list(folders)
     else:
-        # Use folders from config
-        config_folders = config_loader.config.get('watch', {}).get('folders', [])
+        # 新しい場所から読み込む（後方互換性なし）
+        folder_settings = config_loader.config.get('folder_settings', {})
+        config_folders = folder_settings.get('watch_folders', [])
+        
         if not config_folders:
-            console.print("[red]No folders specified. Use command line arguments or set 'watch.folders' in config.[/red]")
+            console.print("[red]監視フォルダが設定されていません。[/red]")
+            console.print("[yellow]config.yamlの'folder_settings.watch_folders'を設定するか、")
+            console.print("コマンドラインでフォルダを指定してください。[/yellow]")
             sys.exit(1)
         watch_folders = config_folders
     
@@ -118,14 +127,14 @@ def watch(folders, output, config, daemon, verbose, show_config):
         # Use command-line output
         output_path = output
     else:
-        # Try watch-specific output first, then global default
-        watch_config = config_loader.config.get('watch', {})
-        output_path = watch_config.get('output_path') or watch_config.get('default_output')
+        # 新しい場所から読み込む（後方互換性なし）
+        folder_settings = config_loader.config.get('folder_settings', {})
+        output_path = folder_settings.get('watch_output') or folder_settings.get('default_output')
         
         if not output_path:
-            # Fall back to global output config
-            output_config = config_loader.config.get('output', {})
-            output_path = output_config.get('default_path') or output_config.get('inbox_folder', 'inbox')
+            console.print("[red]出力先が設定されていません。[/red]")
+            console.print("[yellow]config.yamlの'folder_settings.default_output'を設定してください。[/yellow]")
+            sys.exit(1)
     
     # Show configuration and exit if requested
     if show_config:
@@ -133,8 +142,8 @@ def watch(folders, output, config, daemon, verbose, show_config):
         console.print("=" * 50)
         
         # Vault path
-        vault_path = config_loader.config.get('vault', {}).get('path') or \
-                    config_loader.config.get('output', {}).get('vault_path', 'Not set')
+        folder_settings = config_loader.config.get('folder_settings', {})
+        vault_path = folder_settings.get('vault_path', 'Not set')
         console.print(f"[cyan]Vault Path:[/cyan] {vault_path}")
         
         # Watch folders (resolve paths)
@@ -170,6 +179,9 @@ def watch(folders, output, config, daemon, verbose, show_config):
     console.print(f"[cyan]Output path:[/cyan] {output_path}")
     
     # Update config with resolved values
+    # watchセクションがない場合は作成
+    if 'watch' not in config_loader.config:
+        config_loader.config['watch'] = {}
     config_loader.config['watch']['folders'] = watch_folders
     if output_path:
         config_loader.config['watch']['output_path'] = output_path
@@ -193,7 +205,7 @@ def watch(folders, output, config, daemon, verbose, show_config):
 
 @cli.command()
 @click.argument('folder', type=click.Path(exists=True), required=True)
-@click.option('--output', '-o', type=click.Path(), required=True, help='Output folder in Obsidian vault')
+@click.option('--output', '-o', type=click.Path(), required=False, help='Output folder in Obsidian vault')
 @click.option('--config', '-c', type=click.Path(exists=True), help='Configuration file path')
 @click.option('--recursive', '-r', is_flag=True, help='Process folders recursively')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
@@ -202,7 +214,6 @@ def batch(folder, output, config, recursive, verbose):
     setup_logging(verbose)
     
     console.print(f"[bold blue]Batch processing: {folder}[/bold blue]")
-    console.print(f"[cyan]Output folder:[/cyan] {output}")
     console.print(f"[cyan]Recursive:[/cyan] {'Yes' if recursive else 'No'}")
     
     # Load configuration
@@ -213,9 +224,32 @@ def batch(folder, output, config, recursive, verbose):
         console.print(f"[red]Failed to load configuration: {e}[/red]")
         sys.exit(1)
     
+    # Create path resolver
+    resolver = create_resolver(config_loader.config)
+    
+    # Determine output path
+    if output:
+        # Use command-line output
+        output_path = output
+    else:
+        # Use default output from config
+        folder_settings = config_loader.config.get('folder_settings', {})
+        default_output = folder_settings.get('default_output')
+        
+        if not default_output:
+            console.print("[red]出力先が設定されていません。[/red]")
+            console.print("[yellow]config.yamlの'folder_settings.default_output'を設定するか、")
+            console.print("--outputオプションで出力先を指定してください。[/yellow]")
+            sys.exit(1)
+        
+        # Use the default output path
+        output_path = default_output
+    
+    console.print(f"[cyan]Output folder:[/cyan] {output_path}")
+    
     # Process batch
     async def run_batch():
-        monitor = PDFMonitor(config_loader.config, output)
+        monitor = PDFMonitor(config_loader.config, output_path)
         
         with Progress(
             SpinnerColumn(),
@@ -255,7 +289,7 @@ def batch(folder, output, config, recursive, verbose):
 
 @cli.command()
 @click.argument('pdf_file', type=click.Path(exists=True), required=True)
-@click.option('--output', '-o', type=click.Path(), required=True, help='Output folder in Obsidian vault')
+@click.option('--output', '-o', type=click.Path(), required=False, help='Output folder in Obsidian vault')
 @click.option('--config', '-c', type=click.Path(exists=True), help='Configuration file path')
 @click.option('--force', '-f', is_flag=True, help='Force processing even if filtered out')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
@@ -264,10 +298,8 @@ def process(pdf_file, output, config, force, verbose):
     setup_logging(verbose)
     
     pdf_path = Path(pdf_file)
-    output_path = Path(output)
     
     console.print(f"[bold blue]Processing: {pdf_path.name}[/bold blue]")
-    console.print(f"[cyan]Output folder:[/cyan] {output}")
     
     # Load configuration
     try:
@@ -277,8 +309,33 @@ def process(pdf_file, output, config, force, verbose):
         console.print(f"[red]Failed to load configuration: {e}[/red]")
         sys.exit(1)
     
+    # Create path resolver
+    resolver = create_resolver(config_loader.config)
+    
+    # Determine output path
+    if output:
+        # Use command-line output
+        output_path = Path(output)
+    else:
+        # Use default output from config
+        folder_settings = config_loader.config.get('folder_settings', {})
+        default_output = folder_settings.get('default_output')
+        
+        if not default_output:
+            console.print("[red]出力先が設定されていません。[/red]")
+            console.print("[yellow]config.yamlの'folder_settings.default_output'を設定するか、")
+            console.print("--outputオプションで出力先を指定してください。[/yellow]")
+            sys.exit(1)
+        
+        # Resolve the default output path
+        output_path = resolver.resolve_path(default_output)
+    
+    console.print(f"[cyan]Output folder:[/cyan] {output_path}")
+    
     # Process single file
     async def run_process():
+        logger = logging.getLogger(__name__)
+        
         # Initialize components
         pdf_extractor = PDFExtractor(config_loader.config)
         paper_abstractor = PaperAbstractor(config_loader.config)
@@ -328,22 +385,35 @@ def process(pdf_file, output, config, force, verbose):
             
             # Format note
             task = progress.add_task("[cyan]Creating Obsidian note...", total=None)
+            temp_path = None
             try:
                 note_content = note_formatter.format_note(pdf_data, abstract_data, pdf_path)
-                filename = note_formatter.generate_filename(pdf_data, pdf_path, abstract_data)
-                note_path = output_path / f"{filename}.md"
                 
-                # Ensure unique filename
-                counter = 1
-                while note_path.exists():
-                    note_path = output_path / f"{filename}_{counter}.md"
-                    counter += 1
+                # Step 1: Save with temporary filename
+                temp_filename = f"temp_{uuid.uuid4()}.md"
+                temp_path = output_path / temp_filename
+                temp_path.write_text(note_content, encoding='utf-8')
                 
-                # Write note
-                note_path.write_text(note_content, encoding='utf-8')
-                progress.update(task, description=f"[green]✓ Note created: {note_path.name}")
+                # Step 2: Extract YAML frontmatter
+                yaml_data = extract_yaml_frontmatter(note_content)
+                
+                # Step 3: Generate final filename from YAML
+                final_filename = generate_filename_from_yaml(yaml_data, config_loader.config)
+                final_path = output_path / f"{final_filename}.md"
+                
+                # Step 4: Rename with conflict handling
+                final_path = handle_rename(temp_path, final_path)
+                temp_path = None  # Mark as successfully renamed
+                
+                progress.update(task, description=f"[green]✓ Note created: {final_path.name}")
             except Exception as e:
                 progress.update(task, description=f"[red]✗ Note creation failed: {e}")
+                # Clean up temp file if it exists
+                if temp_path and temp_path.exists():
+                    try:
+                        temp_path.unlink()
+                    except:
+                        pass
                 raise
         
         # Display summary
@@ -358,7 +428,7 @@ def process(pdf_file, output, config, force, verbose):
         if metadata.get('year'):
             console.print(f"[cyan]Year:[/cyan] {metadata['year']}")
         
-        console.print(f"\n[cyan]Note saved to:[/cyan] {note_path}")
+        console.print(f"\n[cyan]Note saved to:[/cyan] {final_path}")
     
     try:
         asyncio.run(run_process())

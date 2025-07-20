@@ -37,9 +37,11 @@ class PaperAbstractor:
         # Initialize Gemini client
         self.client = genai.Client(api_key=self.api_key)
         
-        # Model settings
-        self.model_name = config.get('api', {}).get('model', 'gemini-2.0-flash-001')
-        self.max_tokens = config.get('api', {}).get('max_tokens', 2048)
+        # Model settings - check both api and ai sections for compatibility
+        self.model_name = (config.get('ai', {}).get('model') or 
+                          config.get('api', {}).get('model', 'gemini-2.0-flash-001'))
+        self.max_tokens = (config.get('ai', {}).get('max_tokens') or 
+                          config.get('api', {}).get('max_tokens', 2048))
         
         # Abstractor settings
         self.language = config.get('abstractor', {}).get('language', 'en')

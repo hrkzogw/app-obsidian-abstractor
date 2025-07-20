@@ -29,7 +29,9 @@ class NoteFormatter:
         
         # Output settings
         self.template = config.get('output', {}).get('template', 'default')
-        self.file_pattern = config.get('output', {}).get('file_pattern', '{year}_{first_author}_{title_short}')
+        # Get filename pattern and convert double braces to single braces for Python format()
+        self.file_pattern = config.get('output', {}).get('filename_pattern', '{{year}}_{{authors}}_{{title}}')
+        self.file_pattern = self.file_pattern.replace('{{', '{').replace('}}', '}')
         
         # Language setting
         self.language = config.get('abstractor', {}).get('language', 'en')
@@ -346,9 +348,21 @@ class NoteFormatter:
         # Extract components
         year = metadata.get('year', datetime.now().year)
         
-        # Extract first author
+        # Extract authors
         authors = self._extract_authors(metadata.get('author', ''))
         first_author = authors[0].split()[-1] if authors else 'Unknown'  # Last name
+        
+        # Format authors field for filename
+        if len(authors) == 0:
+            authors_formatted = 'Unknown'
+        elif len(authors) == 1:
+            authors_formatted = authors[0].split()[-1]  # Single author's last name
+        elif len(authors) == 2:
+            # Two authors: LastName1_LastName2
+            authors_formatted = f"{authors[0].split()[-1]}_{authors[1].split()[-1]}"
+        else:
+            # Three or more authors: FirstAuthor_et_al
+            authors_formatted = f"{authors[0].split()[-1]}_et_al"
         
         # Get title - prefer AI-extracted title over PDF metadata
         title = None
@@ -372,6 +386,7 @@ class NoteFormatter:
         # Format filename using pattern
         filename = self.file_pattern.format(
             year=year,
+            authors=authors_formatted,
             first_author=first_author,
             title_short=title_short,
             title=title,

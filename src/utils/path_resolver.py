@@ -214,14 +214,11 @@ def create_resolver(config: Dict[str, Any]) -> PathResolver:
     Returns:
         Configured PathResolver instance
     """
-    # Try multiple possible vault path locations in config
-    vault_path = None
+    # folder_settingsからのみ読み込む（後方互換性なし）
+    folder_settings = config.get('folder_settings', {})
+    vault_path = folder_settings.get('vault_path')
     
-    # Check new structure first
-    if 'vault' in config and 'path' in config['vault']:
-        vault_path = config['vault']['path']
-    # Fall back to old structure
-    elif 'output' in config and 'vault_path' in config['output']:
-        vault_path = config['output']['vault_path']
-    
+    if not vault_path:
+        raise ValueError("設定エラー: 'folder_settings.vault_path' が設定されていません")
+        
     return PathResolver(vault_path)

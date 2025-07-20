@@ -8,6 +8,9 @@ and process them automatically using watchdog.
 import asyncio
 import logging
 import time
+import uuid
+import yaml
+import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set
 from datetime import datetime
@@ -21,6 +24,7 @@ from .paper_abstractor import PaperAbstractor
 from .note_formatter import NoteFormatter
 from .pdf_filter import PDFFilter
 from .utils.path_resolver import PathResolver, create_resolver
+from .utils.note_utils import extract_yaml_frontmatter, generate_filename_from_yaml, handle_rename, create_short_title, clean_filename
 
 logger = logging.getLogger(__name__)
 
@@ -323,33 +327,51 @@ class PDFMonitor:
             # Format note
             note_content = self.note_formatter.format_note(pdf_data, abstract_data, pdf_path)
             
-            # Generate filename
-            filename = self.note_formatter.generate_filename(pdf_data, pdf_path, abstract_data)
+            # Step 1: Save with temporary filename
+            temp_filename = f"temp_{uuid.uuid4()}.md"
+            temp_path = None
             
-            # Resolve output path with current date and PDF metadata
-            context = {
-                'author': pdf_data.get('metadata', {}).get('author', 'Unknown').split(',')[0].strip(),
-                'paper_year': pdf_data.get('metadata', {}).get('year', 'Unknown'),
-                'title': pdf_data.get('metadata', {}).get('title', pdf_path.stem)[:30],
-            }
-            current_output_path = self.path_resolver.resolve_with_placeholders(
-                self.output_path_template, context
-            )
-            
-            # Ensure output directory exists
-            current_output_path.mkdir(parents=True, exist_ok=True)
-            
-            note_path = current_output_path / f"{filename}.md"
-            
-            # Ensure unique filename
-            counter = 1
-            while note_path.exists():
-                note_path = self.output_path / f"{filename}_{counter}.md"
-                counter += 1
-            
-            # Write note
-            async with aiofiles.open(note_path, 'w', encoding='utf-8') as f:
-                await f.write(note_content)
+            try:
+                # Resolve output path with placeholders if needed
+                if hasattr(self, 'path_resolver') and hasattr(self, 'output_path_template'):
+                    # Use YAML data for context instead of PDF metadata
+                    yaml_data = extract_yaml_frontmatter(note_content)
+                    context = {
+                        'author': yaml_data.get('authors', ['Unknown'])[0].split(',')[0].strip() if yaml_data.get('authors') else 'Unknown',
+                        'paper_year': yaml_data.get('year-published', 'Unknown'),
+                        'title': yaml_data.get('title', pdf_path.stem)[:30],
+                    }
+                    current_output_path = self.path_resolver.resolve_with_placeholders(
+                        self.output_path_template, context
+                    )
+                    current_output_path.mkdir(parents=True, exist_ok=True)
+                    temp_path = current_output_path / temp_filename
+                else:
+                    temp_path = Path(self.output_path) / temp_filename
+                
+                # Write temporary file
+                async with aiofiles.open(temp_path, 'w', encoding='utf-8') as f:
+                    await f.write(note_content)
+                
+                # Step 2: Extract YAML frontmatter
+                yaml_data = extract_yaml_frontmatter(note_content)
+                
+                # Step 3: Generate final filename from YAML
+                final_filename = generate_filename_from_yaml(yaml_data, self.config)
+                final_path = temp_path.parent / f"{final_filename}.md"
+                
+                # Step 4: Rename with conflict handling
+                note_path = handle_rename(temp_path, final_path)
+                temp_path = None  # Mark as successfully renamed
+                
+            except Exception as e:
+                # Clean up temp file if it exists
+                if temp_path and temp_path.exists():
+                    try:
+                        temp_path.unlink()
+                    except:
+                        pass
+                raise
             
             logger.info(f"Created note: {note_path}")
             

@@ -19,48 +19,68 @@ cp config/config.yaml.example config/config.yaml
 nano config/config.yaml  # またはお好みのエディタ
 ```
 
+## 📁 フォルダ設定（必須）
+
+### folder_settings セクション
+
+すべてのフォルダ関連設定を一箇所に集約しました。これにより設定の重複を避け、管理が簡単になります。
+
+```yaml
+folder_settings:
+  # Obsidian Vaultのフルパス（必須）
+  # 例: "~/Documents/Obsidian/MyVault"
+  # 例: "/Users/username/Obsidian/Research"
+  vault_path: "~/Documents/Obsidian/MyVault"
+  
+  # デフォルトの出力先 (process, batchコマンド用)
+  # vault:// を使うとVault相対パスになります
+  # 例: "vault://Abstracts"          → Vault/Abstracts/
+  # 例: "vault://Papers/2025"        → Vault/Papers/2025/
+  # 例: "~/Documents/Abstracts"      → ホーム/Documents/Abstracts/
+  default_output: "vault://Abstracts"
+  
+  # watchコマンドで監視するフォルダ
+  # ブラウザのダウンロードフォルダなどを指定すると便利です
+  watch_folders:
+    - "~/Downloads"              # ブラウザのダウンロード先
+    - "~/Desktop/Papers"         # デスクトップの論文フォルダ
+    - "vault://PDFs/Inbox"       # Vault内のInboxフォルダ
+  
+  # watchコマンドの出力先 (オプション、未指定時はdefault_outputを使用)
+  # {{year}}, {{month}}, {{day}} のプレースホルダが使用可能
+  # 例: "vault://Papers/{{year}}/{{month}}" → Papers/2025/01/
+  watch_output: "vault://Papers/{{year}}"
+```
+
+### パス指定の形式
+
+- **vault://**: Vault相対パス（推奨）
+- **~/**: ホームディレクトリ相対パス
+- **絶対パス**: フルパスでの指定
+
 ## 🔑 API設定
 
-### api セクション
+### 必須設定
 
 ```yaml
-api:
-  # Google AI APIキー（必須）
-  google_ai_key: "your-gemini-api-key-here"
-  
+# Google AI APIキー（必須）
+# 取得方法: https://makersuite.google.com/app/apikey
+google_ai_key: "your-gemini-api-key-here"
+```
+
+## 🤖 AI設定
+
+### ai セクション
+
+```yaml
+ai:
   # 使用するモデル
-  # - "gemini-2.0-flash-exp": 最新の高速モデル（推奨）
-  # - "gemini-pro": 標準モデル
-  # - "gemini-pro-vision": マルチモーダル対応
+  # 利用可能: "gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-1.5-flash"
   model: "gemini-2.0-flash-exp"
-  
-  # 最大トークン数（応答の長さ）
-  max_tokens: 2048
-```
-
-### APIキーの管理
-
-環境変数を使用する場合：
-
-```yaml
-api:
-  google_ai_key: "${GOOGLE_AI_API_KEY}"  # 環境変数から読み込み
-```
-
-## 🏠 Vault設定
-
-### vault セクション
-
-```yaml
-vault:
-  # Obsidian vaultのパス
-  # 絶対パスまたは~/を使用
-  path: "~/Documents/Obsidian/MyVault"
-  
-  # 複数のvaultを使用する場合（将来的な拡張）
-  # vaults:
-  #   main: "~/Documents/Obsidian/MainVault"
-  #   research: "~/Documents/Obsidian/ResearchVault"
+  # 生成時の温度パラメータ（0.0-1.0、低いほど一貫性が高い）
+  temperature: 0.3
+  # 最大出力トークン数
+  max_tokens: 8192
 ```
 
 ## 📤 出力設定
@@ -69,25 +89,12 @@ vault:
 
 ```yaml
 output:
-  # デフォルトの出力パス
-  # vault:// プレフィックスでvault相対パスを指定
-  default_path: "vault://Processed/Inbox"
-  
-  # ノートテンプレート
-  # - "default": 標準テンプレート
-  # - "minimal": 最小限の情報
-  # - "detailed": 詳細な情報を含む
-  template: "default"
-  
   # ファイル名パターン
-  # 利用可能な変数:
-  # - {year}: 処理年
-  # - {month}: 処理月
-  # - {day}: 処理日
-  # - {first_author}: 第一著者の姓
-  # - {title_short}: タイトルの最初の20文字
-  # - {timestamp}: Unix timestamp
-  file_pattern: "{year}_{first_author}_{title_short}"
+  # 使用可能な変数: {{year}}, {{authors}}, {{title}}
+  # 例: "{{year}}_{{authors}}_{{title}}" → "2025_Smith_et_al_Neural_Networks.md"
+  filename_pattern: "{{year}}_{{authors}}_{{title}}"
+  # 年ごとのサブディレクトリを作成するか
+  organize_by_year: false
 ```
 
 ### ファイル名パターンの例
@@ -106,52 +113,25 @@ file_pattern: "{timestamp}_{first_author}"
 # 結果: 1737280800_Smith
 ```
 
-## 👁️ 監視設定
+## 👁️ ファイル監視設定
 
 ### watch セクション
 
+監視するフォルダは`folder_settings.watch_folders`で設定します。ここでは監視の動作を設定します。
+
 ```yaml
 watch:
-  # 監視するフォルダのリスト
-  folders:
-    - "~/Downloads/Papers"              # ホームディレクトリ相対
-    - "vault://External/PDFs"          # vault相対
-    - "/Users/name/Desktop/Research"   # 絶対パス
-  
-  # 監視時の出力パス（グローバル設定を上書き）
-  # プレースホルダー対応
-  output_path: "vault://Papers/{{year}}/{{month}}"
-  
   # 監視するファイルパターン
   patterns:
     - "*.pdf"
     - "*.PDF"
-  
   # 無視するパターン
   ignore_patterns:
-    - "*draft*"      # ドラフトを含むファイル
-    - "*tmp*"        # 一時ファイル
-    - ".*"           # 隠しファイル
-    - "*~"           # バックアップファイル
-```
-
-### 高度な監視設定
-
-```yaml
-watch:
-  # 監視間隔（秒）
-  interval: 10
-  
-  # 再帰的に監視
-  recursive: true
-  
-  # イベントタイプ
-  events:
-    - created
-    - moved
-  
-  # ファイルが完全に書き込まれるまでの待機時間（秒）
-  settle_time: 2
+    - "*draft*"        # ドラフトファイル
+    - "*tmp*"          # 一時ファイル
+    - ".*"             # 隠しファイル
+  # 処理遅延（秒）- ファイル書き込み完了を待つ
+  process_delay: 5
 ```
 
 ## 🤖 要約生成設定
@@ -333,28 +313,28 @@ rate_limit:
 
 ```yaml
 # 必要最小限の設定
-api:
-  google_ai_key: "your-key"
+google_ai_key: "your-key"
 
-vault:
-  path: "~/Obsidian/MyVault"
+folder_settings:
+  vault_path: "~/Obsidian/MyVault"
+  default_output: "vault://Abstracts"
 ```
 
 ### 研究者向け設定
 
 ```yaml
-api:
-  google_ai_key: "your-key"
-  model: "gemini-2.0-flash-exp"
+google_ai_key: "your-key"
 
-vault:
-  path: "~/Research/ObsidianVault"
-
-watch:
-  folders:
+folder_settings:
+  vault_path: "~/Research/ObsidianVault"
+  default_output: "vault://Literature/Inbox"
+  watch_folders:
     - "~/Downloads"
     - "~/Mendeley/Papers"
-  output_path: "vault://Literature/{{year}}/{{month}}"
+  watch_output: "vault://Literature/{{year}}/{{month}}"
+
+ai:
+  model: "gemini-2.0-flash-exp"
 
 abstractor:
   language: "en"

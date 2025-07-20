@@ -94,8 +94,15 @@ class ConfigLoader:
         config = self._expand_paths(config)
         
         # Load API key from environment if not in config
-        if not config['api']['google_ai_key']:
+        # Check both old location (api.google_ai_key) and new location (google_ai_key)
+        if 'api' in config and not config['api'].get('google_ai_key'):
             config['api']['google_ai_key'] = os.environ.get('GOOGLE_AI_API_KEY', '')
+        
+        # Also check root level google_ai_key
+        if 'google_ai_key' in config and config['google_ai_key']:
+            if 'api' not in config:
+                config['api'] = {}
+            config['api']['google_ai_key'] = config['google_ai_key']
         
         return config
     

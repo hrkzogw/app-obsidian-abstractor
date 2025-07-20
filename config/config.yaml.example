@@ -1,164 +1,215 @@
-# Obsidian Abstractor Configuration
-# Copy this file to config.yaml and update with your settings
+# Obsidian Abstractor 設定ファイル
+# このファイルをconfig.yamlにコピーして使用してください
 
-# API Configuration
-api:
-  # Google AI API key for Gemini
-  google_ai_key: "your-gemini-api-key-here"
-  # Model to use (gemini-pro, gemini-pro-vision)
-  model: "gemini-pro"
-  # Maximum tokens for response
-  max_tokens: 2048
+# ========================================
+# 必須設定
+# ========================================
 
-# Vault Configuration
-vault:
-  # Path to your Obsidian vault
-  path: "~/Documents/Obsidian/MyVault"
+# Google AI APIキー（必須）
+# 取得方法: https://makersuite.google.com/app/apikey
+google_ai_key: "your-gemini-api-key-here"
 
-# Global Output Configuration
-output:
-  # Default output path for all operations
-  # Supports vault:// prefix for vault-relative paths
-  default_path: "vault://Processed/Inbox"
-  # Note template to use
-  template: "default"
-  # File naming pattern
-  file_pattern: "{title}"
+# ========================================
+# フォルダ設定（必須）
+# ========================================
+folder_settings:
+  # Obsidian Vaultのフルパス
+  # 例: "~/Documents/Obsidian/MyVault"
+  # 例: "/Users/username/Obsidian/Research"
+  vault_path: "~/Documents/Obsidian/MyVault"
+  
+  # デフォルトの出力先 (process, batchコマンド用)
+  # vault:// を使うとVault相対パスになります
+  # 例: "vault://Abstracts"          → Vault/Abstracts/
+  # 例: "vault://Papers/2025"        → Vault/Papers/2025/
+  # 例: "~/Documents/Abstracts"      → ホーム/Documents/Abstracts/
+  default_output: "vault://Abstracts"
+  
+  # watchコマンドで監視するフォルダ
+  # ブラウザのダウンロードフォルダなどを指定すると便利です
+  watch_folders:
+    - "~/Downloads"              # ブラウザのダウンロード先
+    - "~/Desktop/Papers"         # デスクトップの論文フォルダ
+    - "vault://PDFs/Inbox"       # Vault内のInboxフォルダ
+  
+  # watchコマンドの出力先 (オプション、未指定時はdefault_outputを使用)
+  # {{year}}, {{month}}, {{day}} のプレースホルダが使用可能
+  # 例: "vault://Papers/{{year}}/{{month}}" → Papers/2025/01/
+  watch_output: "vault://Papers/{{year}}"
 
-# Watch Configuration
+# ========================================
+# AI設定
+# ========================================
+ai:
+  # 使用するモデル
+  # 利用可能: "gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-1.5-flash"
+  model: "gemini-2.0-flash-exp"
+  # 生成時の温度パラメータ（0.0-1.0、低いほど一貫性が高い）
+  temperature: 0.3
+  # 最大出力トークン数
+  max_tokens: 8192
+
+# ========================================
+# ファイル監視設定
+# ========================================
 watch:
-  # Folders to monitor for new PDFs
-  # Supports: vault:// prefix, ~/ for home, absolute paths
-  folders:
-    - "~/Downloads/Papers"
-    - "vault://External/PDFs"
-    - "~/Desktop/Research"
-  # Output path for watch operation (overrides global default)
-  # Supports placeholders: {{year}}, {{month}}, {{day}}
-  output_path: "vault://Papers/{{year}}/{{month}}"
-  # File patterns to match
+  # 監視するファイルパターン
   patterns:
     - "*.pdf"
     - "*.PDF"
-  # Patterns to ignore
+  # 無視するパターン
   ignore_patterns:
-    - "*draft*"
-    - "*tmp*"
-    - ".*"  # Hidden files
+    - "*draft*"        # ドラフトファイル
+    - "*tmp*"          # 一時ファイル
+    - ".*"             # 隠しファイル
+  # 処理遅延（秒）- ファイル書き込み完了を待つ
+  process_delay: 5
 
-# Abstractor Settings
+# ========================================
+# 要約設定
+# ========================================
 abstractor:
-  # Output language (ja: Japanese, en: English)
+  # 要約の言語 (ja: 日本語, en: 英語)
   language: "ja"
-  # Maximum length of abstract in characters
-  max_length: 1000
-  # Include citations in the abstract
+  # 要約の最大文字数
+  max_length: 6000
+  # 引用情報を含めるか
   include_citations: true
-  # Include figure descriptions
+  # 図表の説明を含めるか
   include_figures: true
-  # Extract and list keywords
+  # キーワードを抽出するか
   extract_keywords: true
+  # Obsidianリンクを作成するか
+  create_links: true
 
-# PDF Processing
+# ========================================
+# PDF処理設定
+# ========================================
 pdf:
-  # Maximum file size in MB
+  # 最大ファイルサイズ (MB)
   max_size_mb: 100
-  # Text extraction method (auto, layout, simple)
+  # テキスト抽出方法 (auto: 自動, layout: レイアウト保持, simple: シンプル)
   extraction_mode: "auto"
-  # Handle encrypted PDFs
+  # 暗号化されたPDFを処理するか
   handle_encrypted: false
-  # Enable visual extraction (multimodal AI)
-  enable_visual_extraction: false
-  # Maximum pages for image extraction
-  max_image_pages: 3
-  # DPI for image extraction
+  # 視覚的抽出を有効にするか（図表をAIに解析させる）
+  enable_visual_extraction: true
+  # 画像抽出の最大ページ数
+  max_image_pages: 5
+  # 画像抽出時のDPI
   image_dpi: 150
 
-# PDF Filtering
+# ========================================
+# PDFフィルタリング設定
+# ========================================
 pdf_filter:
-  # Enable PDF filtering
-  enabled: false
-  # Only process academic papers
-  academic_only: false
-  # Minimum score to be considered academic paper
+  # PDFフィルタリングを有効にするか
+  enabled: true
+  # 学術論文のみを処理するか
+  academic_only: true
+  # 学術論文と判定する最低スコア
   academic_threshold: 50
-  # Page count requirements
+  # ページ数の要件
   min_pages: 5
   max_pages: 500
-  # File size requirements (MB)
+  # ファイルサイズの要件 (MB)
   min_size_mb: 0.1
   max_size_mb: 100
-  # Quarantine folder for non-academic PDFs (optional)
+  # 学術論文でないPDFの移動先フォルダ（オプション）
   # quarantine_folder: "~/Documents/PDFs/Quarantine"
-  # Enable quarantine (move non-academic PDFs)
+  # 移動を有効にするか（学術論文でないPDFを移動）
   quarantine_enabled: false
 
-# Scoring Rules for PDF Filter
+# PDFフィルタリングのスコアリングルール
 scoring_rules:
-  # Positive scoring patterns
+  # ポジティブスコアパターン
   positive:
-    # DOI pattern found (default: 50)
+    # DOIパターンが見つかった場合 (デフォルト: 50)
     doi_found: 50
-    # Abstract section found (default: 20)
+    # Abstractセクションが見つかった場合 (デフォルト: 20)
     abstract_found: 20
-    # References section found (default: 20)
+    # Referencesセクションが見つかった場合 (デフォルト: 20)
     references_found: 20
-    # Academic publisher detected (default: 20)
+    # 学術出版社が検出された場合 (デフォルト: 20)
     academic_publisher: 20
-    # Typical page count (8-40 pages) (default: 15)
+    # 典型的なページ数 (8-40ページ) (デフォルト: 15)
     pages_in_range: 15
-  # Negative scoring patterns
+  # ネガティブスコアパターン
   negative:
-    # Invoice pattern in filename (default: -100)
+    # ファイル名に請求書パターン (デフォルト: -100)
     invoice_in_filename: -100
-    # Receipt pattern in filename (default: -100)
+    # ファイル名に領収書パターン (デフォルト: -100)
     receipt_in_filename: -100
-    # Presentation/slides pattern (default: -50)
+    # プレゼンテーション/スライドパターン (デフォルト: -50)
     presentation_in_filename: -50
-    # Manual/guide pattern (default: -70)
+    # マニュアル/ガイドパターン (デフォルト: -70)
     manual_in_filename: -70
 
-# Advanced Settings
+# ========================================
+# 出力設定
+# ========================================
+output:
+  # ファイル名パターン
+  # 使用可能な変数:
+  #   {{year}} - 発行年
+  #   {{authors}} - 著者（1名: 姓, 2名: 姓1_姓2, 3名以上: 第一著者_et_al）
+  #   {{first_author}} - 第一著者の姓のみ
+  #   {{title}} - フルタイトル
+  #   {{title_short}} - 短縮タイトル（重要な単語のみ）
+  # 例: 
+  #   "{{year}}_{{authors}}_{{title}}" → "2025_Smith_et_al_Neural_Networks.md"
+  #   "{{year}}_{{first_author}}_{{title_short}}" → "2025_Smith_Deep_Learning_Advances.md"
+  filename_pattern: "{{year}}_{{authors}}_{{title}}"
+  # 年ごとのサブディレクトリを作成するか
+  organize_by_year: false
+
+# ========================================
+# 詳細設定
+# ========================================
 advanced:
-  # Enable caching of processed PDFs
+  # 処理済みPDFのキャッシュを有効にするか
   pdf_cache: true
-  # Cache directory
+  # キャッシュディレクトリ
   cache_dir: "~/.cache/obsidian-abstractor"
-  # Logging level (DEBUG, INFO, WARNING, ERROR)
+  # ログレベル (DEBUG, INFO, WARNING, ERROR)
   log_level: "INFO"
-  # Log file location
+  # ログファイルの場所
   log_file: "~/.obsidian-abstractor/logs/app.log"
-  # Number of worker threads
-  workers: 2
-  # Retry failed PDFs
+  # ワーカースレッド数
+  workers: 3
+  # 失敗したPDFをリトライするか
   retry_failed: true
-  # Retry attempts
+  # リトライ回数
   retry_attempts: 3
 
-# Rate Limiting
+# ========================================
+# レート制限設定
+# ========================================
 rate_limit:
-  # Requests per minute
+  # 1分あたりのリクエスト数
   requests_per_minute: 60
-  # Delay between requests (seconds)
+  # リクエスト間の遅延（秒）
   request_delay: 1
-  # Batch size for multiple PDFs
+  # バッチ処理時のサイズ
   batch_size: 5
 
-# Paperpile Sync Configuration
+# ========================================
+# Paperpile同期設定（オプション）
+# ========================================
 paperpile_sync:
-  # Enable Paperpile synchronization
+  # Paperpile同期を有効にするか
   enabled: false
-  # rclone remote name (must be configured with 'rclone config')
+  # rcloneリモート名 ('rclone config'で設定必要)
   rclone_remote: "paperpile:"
-  # Folders to sync from Paperpile
+  # Paperpileから同期するフォルダ
   source_dirs:
-    - "Papers"      # Organized papers
-    - "Unsorted"    # Unorganized papers
-  # Sync files modified within this time period
-  # Examples: "7d" (7 days), "24h" (24 hours), "30d" (30 days)
+    - "Papers"      # 整理済み論文
+    - "Unsorted"    # 未整理論文
+  # この期間内に変更されたファイルを同期
+  # 例: "7d" (7日), "24h" (24時間), "30d" (30日)
   max_age: "7d"
-  # Inbox directory in vault (relative to vault root)
-  # If not specified, uses 'Papers/Inbox' by default
+  # Vault内のInboxディレクトリ（Vaultルートからの相対パス）
+  # 未指定の場合は'Papers/Inbox'を使用
   inbox_dir: "Papers/Inbox"
-  # Log file for sync operations
+  # 同期操作のログファイル
   log_file: "~/.paperpile-sync.log"

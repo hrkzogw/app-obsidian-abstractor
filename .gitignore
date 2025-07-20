@@ -137,6 +137,7 @@ cython_debug/
 
 # VS Code
 .vscode/
+*.code-workspace
 
 # macOS
 .DS_Store
@@ -150,8 +151,7 @@ config/config.yaml
 .obsidian/
 
 # Test outputs
-/tests/outputs/
-/tests/debug/
+/tests/
 
 # Claude AI related
 .claude/
