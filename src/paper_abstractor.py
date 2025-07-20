@@ -443,13 +443,15 @@ class PaperAbstractor:
             logger.debug(f"Gemini markdown output saved to: {debug_file}")
         
         # Return the complete markdown as the main content
-        return {
+        abstract_data = {
             'markdown_content': markdown_text,
             'abstract_language': self.language,
             'model_used': self.model_name,
             'generation_date': datetime.now().isoformat(),
             'use_markdown_format': True
         }
+        logger.debug(f"Final abstract_data to be returned: {abstract_data}")
+        return abstract_data
     
     def _extract_list_section(self, text: str, section_names: List[str]) -> List[str]:
         """Extract a list section from the generated text."""

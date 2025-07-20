@@ -63,6 +63,13 @@ app-obsidian-abstractorの詳細なドキュメントへようこそ。このペ
 - [app-obsidian_ai_organizer](https://github.com/hrkzogw/app-obsidian_ai_organizer) - 連携ツール
 - [Google AI Studio](https://makersuite.google.com/app/apikey) - APIキー取得
 
+## 🔧 関連ツール・ガイド
+
+- **[Paperpile同期ガイド](./paperpile-sync.md)** - Paperpileの論文を自動同期
+  - Google Driveから直接同期
+  - 複数アカウント対応
+  - app-obsidian-abstractorとの完全統合
+
 ## 🆘 サポート
 
 問題や質問がある場合は：

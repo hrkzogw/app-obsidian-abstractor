@@ -1,0 +1,128 @@
+# Obsidian Abstractor Configuration
+# Copy this file to config.yaml and update with your settings
+
+# API Configuration
+api:
+  # Google AI API key for Gemini
+  google_ai_key: "AIzaSyAVc67kGWS1r79pUtyVMri3pggOUm1zu-A"
+  # Model to use (gemini-2.0-flash-001, gemini-1.5-pro-latest)
+  model: "gemini-2.0-flash-001"
+  # Maximum tokens for response
+  max_tokens: 8000
+
+# Vault Configuration
+vault:
+  # Path to your Obsidian vault (using current directory for testing)
+  path: "."
+
+# Global Output Configuration
+output:
+  # Default output path for all operations
+  default_path: "tests/00_inbox"
+  # Note template to use
+  template: "default"
+  # File naming pattern
+  # {title} - Title from PDF metadata or AI extraction
+  # {pdf_filename} - Original PDF filename (without extension)
+  file_pattern: "{title}"
+
+# Watch Configuration
+watch:
+  # Folders to monitor for new PDFs
+  folders:
+    - "tests/91_articles"
+  # Output path for watch operation
+  output_path: "tests/00_inbox"
+  # File patterns to match
+  patterns:
+    - "*.pdf"
+    - "*.PDF"
+  # Patterns to ignore
+  ignore_patterns:
+    - "*draft*"
+    - "*tmp*"
+    - ".*"  # Hidden files
+
+# Abstractor Settings
+abstractor:
+  # Output language (ja: Japanese, en: English)
+  language: "ja"
+  # Maximum length of abstract in characters
+  max_length: 5000
+  # Include citations in the abstract
+  include_citations: true
+  # Include figure descriptions
+  include_figures: true
+  # Extract and list keywords
+  extract_keywords: true
+  
+  # Visual extraction settings (Phase 1)
+  # Enable visual extraction of PDF pages as images
+  enable_visual_extraction: true  # Set to true to enable
+  # Maximum number of pages to extract as images
+  max_image_pages: 10
+  # DPI for image extraction (higher = better quality but larger size)
+  image_dpi: 150
+
+# PDF Processing
+pdf:
+  # Maximum file size in MB
+  max_size_mb: 100
+  # Text extraction method (auto, layout, simple)
+  extraction_mode: "auto"
+  # Handle encrypted PDFs
+  handle_encrypted: false
+  # Enable visual extraction (multimodal AI)
+  enable_visual_extraction: false
+  # Maximum pages for image extraction
+  max_image_pages: 3
+  # DPI for image extraction
+  image_dpi: 150
+
+# PDF Filtering
+pdf_filter:
+  # Enable PDF filtering (disabled for testing)
+  enabled: false
+  # Only process academic papers
+  academic_only: false
+  # Minimum score to be considered academic paper
+  academic_threshold: 50
+
+# Advanced Settings
+advanced:
+  # Enable caching of processed PDFs
+  pdf_cache: true
+  # Cache directory
+  cache_dir: "~/.cache/obsidian-abstractor"
+  # Logging level (DEBUG, INFO, WARNING, ERROR)
+  log_level: "DEBUG"
+  # Log file location
+  log_file: "~/.obsidian-abstractor/logs/app.log"
+  # Number of worker threads
+  workers: 2
+  # Retry failed PDFs
+  retry_failed: true
+  # Retry attempts
+  retry_attempts: 3
+
+# Rate Limiting
+rate_limit:
+  # Requests per minute
+  requests_per_minute: 60
+  # Delay between requests (seconds)
+  request_delay: 1
+  # Batch size for multiple PDFs
+  batch_size: 5
+
+# Paperpile Sync Configuration
+paperpile_sync:
+  enabled: true
+  rclone_remote: "paperpile:"
+  source_dirs:
+    - "All Papers/A"
+    - "All Papers/M"
+    - "All Papers/S"
+    - "All Papers/Y"
+  max_age: "365d"
+  inbox_dir: "tests/91_articles"
+  log_file: "~/.paperpile-sync-test.log"

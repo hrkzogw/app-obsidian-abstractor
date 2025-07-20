@@ -23,6 +23,7 @@ from .paper_abstractor import PaperAbstractor
 from .note_formatter import NoteFormatter
 from .pdf_filter import PDFFilter
 from .utils.path_resolver import PathResolver, create_resolver
+from .paperpile_sync import sync_paperpile
 
 console = Console()
 
@@ -329,7 +330,7 @@ def process(pdf_file, output, config, force, verbose):
             task = progress.add_task("[cyan]Creating Obsidian note...", total=None)
             try:
                 note_content = note_formatter.format_note(pdf_data, abstract_data, pdf_path)
-                filename = note_formatter.generate_filename(pdf_data, pdf_path)
+                filename = note_formatter.generate_filename(pdf_data, pdf_path, abstract_data)
                 note_path = output_path / f"{filename}.md"
                 
                 # Ensure unique filename
@@ -361,6 +362,64 @@ def process(pdf_file, output, config, force, verbose):
     
     try:
         asyncio.run(run_process())
+    except Exception as e:
+        console.print(f"\n[red]Error: {e}[/red]")
+        sys.exit(1)
+
+
+@cli.command(name='paperpile-sync')
+@click.option('--dry-run', is_flag=True, help='Perform a dry run without copying files')
+@click.option('--config', '-c', type=click.Path(exists=True), help='Configuration file path')
+@click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
+def paperpile_sync_cmd(dry_run, config, verbose):
+    """Sync PDFs from Paperpile to Obsidian vault using rclone."""
+    setup_logging(verbose)
+    
+    # Load configuration
+    try:
+        config_loader = ConfigLoader(config)
+        console.print("[green]✓[/green] Configuration loaded")
+    except Exception as e:
+        console.print(f"[red]Failed to load configuration: {e}[/red]")
+        sys.exit(1)
+    
+    # Create path resolver
+    resolver = create_resolver(config_loader.config)
+    
+    # Check if paperpile sync is enabled
+    sync_config = config_loader.config.get('paperpile_sync', {})
+    if not sync_config.get('enabled', False):
+        console.print("\n[yellow]Paperpile sync is disabled in configuration.[/yellow]")
+        console.print("To enable, add the following to your config.yaml:")
+        console.print("\n[cyan]paperpile_sync:")
+        console.print("  enabled: true")
+        console.print("  rclone_remote: 'paperpile:'")
+        console.print("  source_dirs: ['Papers', 'Unsorted']")
+        console.print("  max_age: '7d'[/cyan]\n")
+        sys.exit(1)
+    
+    async def run_sync():
+        """Run the synchronization process."""
+        console.print("\n[bold cyan]Paperpile PDF Sync[/bold cyan]")
+        console.print("=" * 50)
+        
+        if dry_run:
+            console.print("[yellow]DRY RUN MODE - No files will be copied[/yellow]\n")
+        
+        # Run sync
+        success = await sync_paperpile(config_loader.config, resolver, dry_run)
+        
+        if success:
+            console.print("\n[bold green]Sync completed successfully![/bold green]")
+        else:
+            console.print("\n[bold red]Sync failed. Check the logs for details.[/bold red]")
+            sys.exit(1)
+    
+    try:
+        asyncio.run(run_sync())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Sync cancelled by user[/yellow]")
+        sys.exit(0)
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]")
         sys.exit(1)

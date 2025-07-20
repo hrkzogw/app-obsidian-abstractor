@@ -329,13 +329,14 @@ class NoteFormatter:
         
         return sections
     
-    def generate_filename(self, pdf_data: Dict[str, Any], pdf_path: Path) -> str:
+    def generate_filename(self, pdf_data: Dict[str, Any], pdf_path: Path, abstract_data: Optional[Dict[str, Any]] = None) -> str:
         """
         Generate a filename for the note.
         
         Args:
             pdf_data: Extracted PDF data
             pdf_path: Path to the original PDF file
+            abstract_data: Abstract data from AI (optional)
             
         Returns:
             Generated filename (without extension)
@@ -349,8 +350,23 @@ class NoteFormatter:
         authors = self._extract_authors(metadata.get('author', ''))
         first_author = authors[0].split()[-1] if authors else 'Unknown'  # Last name
         
-        # Create short title
-        title = metadata.get('title', pdf_path.stem)
+        # Get title - prefer AI-extracted title over PDF metadata
+        title = None
+        
+        if abstract_data:
+            # Check if using markdown format mode
+            if abstract_data.get('use_markdown_format') and 'markdown_content' in abstract_data:
+                # Extract title from AI-generated markdown (highest priority)
+                title = self._extract_title_from_markdown(abstract_data['markdown_content'])
+            
+            # Fallback to direct title field (for backward compatibility)
+            if not title and 'title' in abstract_data:
+                title = abstract_data['title']
+        
+        # Final fallback to PDF metadata
+        if not title:
+            title = metadata.get('title', pdf_path.stem)
+        
         title_short = self._create_short_title(title)
         
         # Format filename using pattern
@@ -359,6 +375,7 @@ class NoteFormatter:
             first_author=first_author,
             title_short=title_short,
             title=title,
+            pdf_filename=pdf_path.stem,  # PDF filename without extension
         )
         
         # Clean filename
@@ -464,3 +481,31 @@ class NoteFormatter:
         tag = tag.strip('-').lower()
         
         return tag
+    
+    def _extract_title_from_markdown(self, markdown_content: str) -> str:
+        """Extract title from markdown frontmatter using regex."""
+        import re
+        try:
+            # --- で囲まれたフロントマター部分を抽出
+            match = re.search(r'^---\s*\n(.*?)\n---\s*\n', markdown_content, re.DOTALL)
+            if not match:
+                return ""
+
+            frontmatter_text = match.group(1)
+
+            # フロントマターからtitle行を抽出
+            title_match = re.search(r'^\s*title:\s*(.*)', frontmatter_text, re.MULTILINE)
+            if not title_match:
+                return ""
+
+            title = title_match.group(1).strip()
+
+            # クォートがあれば削除
+            if title.startswith(('"', "'")) and title.endswith(('"', "'")):
+                title = title[1:-1]
+            
+            return title
+
+        except Exception as e:
+            logger.warning(f"Error parsing title from markdown frontmatter: {e}")
+            return ""

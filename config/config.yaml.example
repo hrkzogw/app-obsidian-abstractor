@@ -23,7 +23,7 @@ output:
   # Note template to use
   template: "default"
   # File naming pattern
-  file_pattern: "{year}_{first_author}_{title_short}"
+  file_pattern: "{title}"
 
 # Watch Configuration
 watch:
@@ -143,3 +143,22 @@ rate_limit:
   request_delay: 1
   # Batch size for multiple PDFs
   batch_size: 5
+
+# Paperpile Sync Configuration
+paperpile_sync:
+  # Enable Paperpile synchronization
+  enabled: false
+  # rclone remote name (must be configured with 'rclone config')
+  rclone_remote: "paperpile:"
+  # Folders to sync from Paperpile
+  source_dirs:
+    - "Papers"      # Organized papers
+    - "Unsorted"    # Unorganized papers
+  # Sync files modified within this time period
+  # Examples: "7d" (7 days), "24h" (24 hours), "30d" (30 days)
+  max_age: "7d"
+  # Inbox directory in vault (relative to vault root)
+  # If not specified, uses 'Papers/Inbox' by default
+  inbox_dir: "Papers/Inbox"
+  # Log file for sync operations
+  log_file: "~/.paperpile-sync.log"

@@ -56,8 +56,8 @@ class PDFEventHandler(FileSystemEventHandler):
         
         logger.info(f"New PDF detected: {path}")
         
-        # Add to processing queue
-        asyncio.create_task(self.monitor.add_to_queue(path))
+        # Add to processing queue using thread-safe method
+        self.monitor.add_to_queue_threadsafe(path)
     
     def _matches_patterns(self, path: Path) -> bool:
         """Check if file matches watch patterns."""
@@ -126,6 +126,7 @@ class PDFMonitor:
         self.is_running = False
         self.observer: Optional[Observer] = None
         self.workers_tasks: List[asyncio.Task] = []
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
     
     async def start(self, daemon: bool = False):
         """
@@ -135,6 +136,9 @@ class PDFMonitor:
             daemon: Run as daemon in background
         """
         logger.info(f"Starting PDF monitor for folders: {self.folders}")
+        
+        # Get the running event loop
+        self.loop = asyncio.get_running_loop()
         
         try:
             # Validate folders
@@ -250,6 +254,32 @@ class PDFMonitor:
         await self.processing_queue.put(pdf_path)
         logger.info(f"Added to queue: {pdf_path}")
     
+    def add_to_queue_threadsafe(self, file_path: Path):
+        """
+        Thread-safe method to add a file to the processing queue.
+        This method can be called from any thread.
+        
+        Args:
+            file_path: Path to the PDF file
+        """
+        def _add():
+            # Check if already processed
+            if str(file_path) in self.processed_files:
+                logger.debug(f"Already processed: {file_path}")
+                return
+                
+            try:
+                self.processing_queue.put_nowait(file_path)
+                logger.info(f"Added to queue: {file_path}")
+            except asyncio.QueueFull:
+                logger.warning(f"Processing queue is full. Could not add {file_path}")
+        
+        # Schedule the add operation in the event loop thread
+        if self.loop:
+            self.loop.call_soon_threadsafe(_add)
+        else:
+            logger.warning("Event loop not available. Cannot add file to queue.")
+    
     async def process_file(self, pdf_path: Path, force: bool = False) -> Optional[Path]:
         """
         Process a single PDF file.
@@ -294,7 +324,7 @@ class PDFMonitor:
             note_content = self.note_formatter.format_note(pdf_data, abstract_data, pdf_path)
             
             # Generate filename
-            filename = self.note_formatter.generate_filename(pdf_data, pdf_path)
+            filename = self.note_formatter.generate_filename(pdf_data, pdf_path, abstract_data)
             
             # Resolve output path with current date and PDF metadata
             context = {

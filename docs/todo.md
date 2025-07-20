@@ -177,3 +177,61 @@
 3. **拡張性の向上**:
    - プロンプトテンプレートの変更だけで出力形式を柔軟に調整可能
    - 将来的な改善や多言語対応が容易
+
+## Paperpile同期機能の統合 (2025-07-19 18:57:00)
+
+### 完了した統合作業
+
+#### 1. Paperpile同期機能のPython実装
+- [x] **src/paperpile_sync.py**: rcloneを使用したPDF同期機能
+  - 安全なsubprocessハンドリング
+  - リアルタイム出力ストリーミング
+  - 非同期処理による高速化
+  - エラーハンドリングとログ記録
+
+#### 2. CLIコマンドの追加
+- [x] **paperpile-syncコマンドの統合**: main.pyに新しいCLIコマンドを追加
+  - `--dry-run`オプションによるテスト実行
+  - `--verbose`オプションによる詳細出力
+  - 設定ファイルからの読み込み対応
+
+#### 3. 設定ファイルの拡張
+- [x] **config.yaml.exampleの更新**:
+  ```yaml
+  paperpile_sync:
+    enabled: false
+    rclone_remote: "paperpile:"
+    source_dirs: ["Papers", "Unsorted"]
+    max_age: "7d"
+    inbox_dir: "Papers/Inbox"
+    log_file: "~/.paperpile-sync.log"
+  ```
+
+#### 4. ドキュメントの整備
+- [x] **paperpile-sync.mdの作成**: 
+  - rcloneのインストールと設定手順
+  - Google Drive認証の詳細な手順
+  - Paperpileフォルダ構造の説明
+  - 初回同期と継続運用の設定方法
+  - 自動化設定（cron、launchd）
+
+#### 5. 実環境でのテスト
+- [x] **rclone設定**: Paperpile Google Driveとの接続設定
+- [x] **同期テスト**: All Papers/A, M, Sフォルダから47個のPDFを同期
+- [x] **自動処理テスト**: watchコマンドでPDFを自動的にObsidianノートに変換
+- [x] **エンドツーエンド確認**: 同期→監視→処理→ノート生成の全工程が正常動作
+
+### 統合の成果
+
+1. **シームレスな連携**:
+   - スタンドアロンのbashスクリプトから統合されたPythonコマンドへ
+   - app-obsidian-abstractorの他の機能との完全な統合
+
+2. **使いやすさの向上**:
+   - 単一の設定ファイルで全機能を管理
+   - 統一されたCLIインターフェース
+   - より安全で堅牢な実装
+
+3. **ドキュメントの充実**:
+   - 新規ユーザーが初期設定から継続運用まで理解できる詳細なガイド
+   - rclone設定の具体的な手順を含む
